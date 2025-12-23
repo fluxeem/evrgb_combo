@@ -1,0 +1,24 @@
+{
+    "version": 8,
+    "configurePresets": [
+        {
+            "name": "win64_release",
+            "description": "Sets Visual Studio 18 2026 generator, build and install directory",
+            "hidden": false,
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "release",
+            "configurePreset": "win64_release",
+            "configuration": "Release"
+        }
+    ]
+}

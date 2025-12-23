@@ -1,0 +1,4 @@
+add_subdirectory(camera_enum_example)
+add_subdirectory(combo_sync_display_example)
+add_subdirectory(recorded_replay_example)
+add_subdirectory(rgb_exposure_step_example)

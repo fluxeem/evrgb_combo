@@ -1,0 +1,15 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Add the current directory to the module path to find FindMVS.cmake
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+
+# Find dependencies
+find_dependency(MVS REQUIRED)
+find_dependency(OpenCV REQUIRED)
+
+# Include the targets
+include("${CMAKE_CURRENT_LIST_DIR}/evrgb_combo-targets.cmake")
+
+check_required_components(evrgb_combo)
