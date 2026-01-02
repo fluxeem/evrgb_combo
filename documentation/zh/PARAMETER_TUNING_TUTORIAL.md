@@ -1,22 +1,22 @@
 @page parameter_tuning_tutorial 参数调整教程
 
-本教程介绍如何调整 RGB 与 DVS 相机参数，以获得最佳图像质量与性能。
+本教程介绍如何调整 RGB 相机参数，以获得最佳图像质量与性能。
 
 ## 目录
 
-- [RGB 相机参数调整](#rgb-相机参数调整)
-- [DVS 相机参数调整](#dvs-相机参数调整)
+- [RGB 相机曝光时间调整](#rgb-相机曝光时间调整)
 - [参数查询和验证](#参数查询和验证)
 - [常见参数问题](#常见参数问题)
 
-## RGB 相机参数调整
+## RGB 相机曝光时间调整
 
-### 曝光时间调整
+以下示例演示如何使用 Combo 接口调整 RGB 相机的曝光时间。此示例基于 `rgb_exposure_step_example` 示例程序。
 
 ```cpp
-#include "camera/rgb_camera.h"
+#include "core/combo.h"
 #include <iostream>
 
+// 辅助函数：打印操作状态
 void printStatus(const char* action, const evrgb::CameraStatus& status) {
     if (status.success()) {
         std::cout << action << " -> 成功" << std::endl;
@@ -27,336 +27,68 @@ void printStatus(const char* action, const evrgb::CameraStatus& status) {
 }
 
 int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) {
-        std::cerr << "未找到 RGB 相机" << std::endl;
-        return 1;
-    }
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) {
-        std::cerr << "相机初始化失败" << std::endl;
-        return 1;
-    }
-
-    // 1. 禁用自动曝光
-    auto st_auto = camera.setEnumByName("ExposureAuto", "Off");
-    printStatus("设置自动曝光=关闭", st_auto);
-
-    // 2. 设置曝光模式为定时
-    auto st_mode = camera.setEnumByName("ExposureMode", "Timed");
-    printStatus("设置曝光模式=定时", st_mode);
-
-    // 3. 查询当前曝光时间
+    // 使用 RGB 相机初始化 Combo
+    auto [rgb_cameras, dvs_cameras] = evrgb::enumerateAllCameras();
+    evrgb::Combo combo(rgb_cameras[0].serial_number, "");
+    combo.init();
+    
+    auto rgb_camera = combo.getRgbCamera();
+    
+    // 1. 禁用自动曝光以进行手动控制
+    rgb_camera->setEnumByName("ExposureAuto", "Off");
+    rgb_camera->setEnumByName("ExposureMode", "Timed");
+    
+    // 2. 查询当前曝光时间范围
     evrgb::FloatProperty exposure{};
-    auto st = camera.getFloat("ExposureTime", exposure);
-    printStatus("获取曝光时间", st);
-    if (st.success()) {
-        std::cout << "当前曝光时间: " << exposure.value << " us"
-                  << " (最小=" << exposure.min << ", 最大=" << exposure.max
-                  << ", 步长=" << exposure.inc << ")" << std::endl;
-    }
-
-    // 4. 设置新的曝光时间（例如 10ms）
-    double target_exposure_us = 10000.0;
-    if (st.success()) {
-        // 限制在相机支持范围内
-        target_exposure_us = std::max(exposure.min, std::min(exposure.max, target_exposure_us));
-        std::cout << "设置目标曝光时间: " << target_exposure_us << " us" << std::endl;
-    }
+    rgb_camera->getFloat("ExposureTime", exposure);
+    std::cout << "当前曝光: " << exposure.value << " us"
+              << " (最小=" << exposure.min << ", 最大=" << exposure.max << ")" << std::endl;
     
-    st = camera.setFloat("ExposureTime", target_exposure_us);
+    // 3. 设置新的曝光时间（限制在相机范围内）
+    double target_exposure_us = 10000.0; // 10ms
+    target_exposure_us = std::max(exposure.min, std::min(exposure.max, target_exposure_us));
+    
+    // 先尝试浮点数，如果失败则使用整数
+    auto st = rgb_camera->setFloat("ExposureTime", target_exposure_us);
     if (!st.success()) {
-        // 某些相机可能需要使用整数类型
-        st = camera.setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
+        rgb_camera->setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
     }
-    printStatus("设置曝光时间", st);
-
-    // 5. 验证设置结果
-    st = camera.getFloat("ExposureTime", exposure);
-    if (st.success()) {
-        std::cout << "实际曝光时间: " << exposure.value << " us" << std::endl;
-    }
-
-    camera.destroy();
-    return 0;
-}
-```
-
-### 增益调整
-
-```cpp
-#include "camera/rgb_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) return 1;
-
-    // 禁用自动增益
-    auto st = camera.setEnumByName("GainAuto", "Off");
-    std::cout << "设置自动增益=关闭: " << (st.success() ? "成功" : "失败") << std::endl;
-
-    // 查询当前增益
-    evrgb::FloatProperty gain{};
-    st = camera.getFloat("Gain", gain);
-    if (st.success()) {
-        std::cout << "当前增益: " << gain.value 
-                  << " (范围: " << gain.min << " - " << gain.max << ")" << std::endl;
-        
-        // 设置增益为中间值
-        double new_gain = (gain.min + gain.max) / 2.0;
-        st = camera.setFloat("Gain", new_gain);
-        std::cout << "设置增益=" << new_gain << ": " << (st.success() ? "成功" : "失败") << std::endl;
-        
-        // 验证设置
-        if (camera.getFloat("Gain", gain)) {
-            std::cout << "实际增益: " << gain.value << std::endl;
-        }
-    }
-
-    camera.destroy();
-    return 0;
-}
-```
-
-### 白平衡调整
-
-```cpp
-#include "camera/rgb_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) return 1;
-
-    // 设置白平衡模式
-    auto st = camera.setEnumByName("BalanceWhiteAuto", "Once");
-    std::cout << "执行一次白平衡: " << (st.success() ? "成功" : "失败") << std::endl;
-
-    // 等待白平衡完成
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-
-    // 查询白平衡参数
-    evrgb::FloatProperty rb_ratio{}, gb_ratio{};
-    if (camera.getFloat("BalanceRatioRed", rb_ratio) && 
-        camera.getFloat("BalanceRatioGreen", gb_ratio)) {
-        std::cout << "红/绿比: " << rb_ratio.value << std::endl;
-        std::cout << "绿/蓝比: " << gb_ratio.value << std::endl;
-    }
-
-    // 手动设置白平衡
-    st = camera.setEnumByName("BalanceWhiteAuto", "Off");
-    st = camera.setFloat("BalanceRatioRed", 1.2);
-    st = camera.setFloat("BalanceRatioGreen", 1.0);
-    st = camera.setFloat("BalanceRatioBlue", 1.8);
-    std::cout << "手动白平衡设置: " << (st.success() ? "成功" : "失败") << std::endl;
-
-    camera.destroy();
-    return 0;
-}
-```
-
-### 图像格式和分辨率
-
-```cpp
-#include "camera/rgb_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) return 1;
-
-    // 查询支持的图像格式
-    evrgb::EnumProperty pixel_format{};
-    if (camera.getEnum("PixelFormat", pixel_format)) {
-        std::cout << "当前像素格式: " << pixel_format.value << std::endl;
-        std::cout << "支持的格式: ";
-        for (const auto& entry : pixel_format.entries) {
-            std::cout << entry << " ";
-        }
-        std::cout << std::endl;
-    }
-
-    // 设置像素格式
-    auto st = camera.setEnumByName("PixelFormat", "BGR8");
-    std::cout << "设置 BGR8 格式: " << (st.success() ? "成功" : "失败") << std::endl;
-
-    // 查询和设置分辨率
-    evrgb::IntProperty width{}, height{};
-    if (camera.getInt("Width", width) && camera.getInt("Height", height)) {
-        std::cout << "当前分辨率: " << width.value << "x" << height.value << std::endl;
-        
-        // 设置新分辨率（如果支持）
-        st = camera.setInt("Width", 1280);
-        st = camera.setInt("Height", 720);
-        std::cout << "设置 1280x720 分辨率: " << (st.success() ? "成功" : "失败") << std::endl;
-    }
-
-    camera.destroy();
-    return 0;
-}
-```
-
-## DVS 相机参数调整
-
-### 偏置参数调整
-
-```cpp
-#include "camera/dvs_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllDvsCameras();
-    if (cameras.empty()) {
-        std::cerr << "未找到 DVS 相机" << std::endl;
-        return 1;
-    }
-
-    evrgb::DvsCamera camera;
-    if (!camera.initialize(cameras[0].serial)) {
-        std::cerr << "DVS 相机初始化失败" << std::endl;
-        return 1;
-    }
-
-    // 设置偏置参数
-    evrgb::CameraStatus status;
     
-    // 1. 设置灵敏度
-    status = camera.setFloat("sensitivity", 0.5);
-    std::cout << "设置灵敏度=0.5: " << (status.success() ? "成功" : "失败") << std::endl;
-
-    // 2. 设置阈值
-    status = camera.setFloat("threshold", 0.3);
-    std::cout << "设置阈值=0.3: " << (status.success() ? "成功" : "失败") << std::endl;
-
-    // 3. 设置 refractory period
-    status = camera.setFloat("refractory_period", 1.0);
-    std::cout << "设置不应期=1.0: " << (status.success() ? "成功" : "失败") << std::endl;
-
-    // 4. 设置带宽
-    status = camera.setFloat("bandwidth", 0.9);
-    std::cout << "设置带宽=0.9: " << (status.success() ? "成功" : "失败") << std::endl;
-
-    camera.destroy();
+    // 4. 验证设置
+    rgb_camera->getFloat("ExposureTime", exposure);
+    std::cout << "应用的曝光: " << exposure.value << " us" << std::endl;
+    
+    combo.destroy();
     return 0;
 }
 ```
 
-### 事件过滤配置
+### 曝光时间调整要点
 
-```cpp
-#include "camera/dvs_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllDvsCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::DvsCamera camera;
-    if (!camera.initialize(cameras[0].serial)) return 1;
-
-    // 设置区域过滤
-    auto status = camera.setBool("region_filter", true);
-    std::cout << "启用区域过滤: " << (status.success() ? "成功" : "失败") << std::endl;
-
-    // 设置噪声过滤
-    status = camera.setBool("noise_filter", true);
-    std::cout << "启用噪声过滤: " << (status.success() ? "成功" : "失败") << std::endl;
-
-    // 设置 ROI（感兴趣区域）
-    status = camera.setInt("roi_x", 100);
-    status = camera.setInt("roi_y", 100);
-    status = camera.setInt("roi_width", 300);
-    status = camera.setInt("roi_height", 300);
-    std::cout << "设置 ROI: " << (status.success() ? "成功" : "失败") << std::endl;
-
-    camera.destroy();
-    return 0;
-}
-```
+1. **禁用自动曝光**：在手动控制前将 `ExposureAuto` 设置为 "Off"
+2. **设置曝光模式**：某些相机需要将 `ExposureMode` 设置为 "Timed"
+3. **查询参数范围**：设置前始终检查最小/最大值
+4. **处理不同类型**：某些相机将 `ExposureTime` 暴露为浮点数，其他为整数
+5. **验证设置**：读取值以确认已正确应用
 
 ## 参数查询和验证
 
-### 通用参数查询函数
+### 查询参数信息
 
 ```cpp
-#include "camera/rgb_camera.h"
-#include <iostream>
-
-void printFloatProperty(evrgb::HikvisionRgbCamera& camera, const std::string& name) {
-    evrgb::FloatProperty prop;
-    if (camera.getFloat(name, prop)) {
-        std::cout << name << ": " << prop.value 
-                  << " (范围: " << prop.min << " - " << prop.max
-                  << ", 步长: " << prop.inc << ")" << std::endl;
-    } else {
-        std::cout << name << ": 无法获取" << std::endl;
-    }
-}
-
-void printIntProperty(evrgb::HikvisionRgbCamera& camera, const std::string& name) {
-    evrgb::IntProperty prop;
-    if (camera.getInt(name, prop)) {
-        std::cout << name << ": " << prop.value 
-                  << " (范围: " << prop.min << " - " << prop.max
-                  << ", 步长: " << prop.inc << ")" << std::endl;
-    } else {
-        std::cout << name << ": 无法获取" << std::endl;
-    }
-}
-
-void printEnumProperty(evrgb::HikvisionRgbCamera& camera, const std::string& name) {
-    evrgb::EnumProperty prop;
-    if (camera.getEnum(name, prop)) {
-        std::cout << name << ": " << prop.value << std::endl;
-        std::cout << "  可选值: ";
-        for (const auto& entry : prop.entries) {
-            std::cout << entry << " ";
-        }
-        std::cout << std::endl;
-    } else {
-        std::cout << name << ": 无法获取" << std::endl;
-    }
-}
-
-int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) return 1;
-
-    std::cout << "=== RGB 相机参数信息 ===" << std::endl;
-
-    // 浮点参数
-    printFloatProperty(camera, "ExposureTime");
-    printFloatProperty(camera, "Gain");
-    printFloatProperty(camera, "AcquisitionFrameRate");
-
-    // 整数参数
-    printIntProperty(camera, "Width");
-    printIntProperty(camera, "Height");
-    printIntProperty(camera, "PayloadSize");
-
-    // 枚举参数
-    printEnumProperty(camera, "PixelFormat");
-    printEnumProperty(camera, "ExposureAuto");
-    printEnumProperty(camera, "GainAuto");
-
-    camera.destroy();
-    return 0;
+// 查询曝光时间范围和当前值
+evrgb::FloatProperty exposure{};
+auto st = rgb_camera->getFloat("ExposureTime", exposure);
+if (st.success()) {
+    std::cout << "当前曝光: " << exposure.value << " us"
+              << " (最小=" << exposure.min << ", 最大=" << exposure.max
+              << ", 增量=" << exposure.inc << ")" << std::endl;
 }
 ```
+
+### 其他参数
+
+对于其他参数，如增益、白平衡、像素格式、分辨率和 DVS 相机参数，请参考您特定相机型号的制造商文档。EvRGB Combo SDK 提供通用接口来访问这些参数，但确切的参数名称和支持的值因相机型号而异。
 
 ## 常见参数问题
 
@@ -367,52 +99,56 @@ int main() {
 2. 相机不支持该参数
 3. 相机处于错误状态
 4. 权限不足
+5. 需要先禁用自动模式
 
 **解决方法**：
-1. 先查询参数范围，再设置值
+1. 设置值前查询参数范围
 2. 检查相机型号支持的功能
 3. 重新初始化相机
 4. 确保有足够的权限
+5. 在手动控制前禁用自动参数
 
-### Q: 自动参数无法禁用
+### Q: 无法禁用自动曝光
 
 **解决步骤**：
-1. 确保相机已启动
-2. 按正确顺序禁用自动参数
-3. 检查相机是否支持手动模式
-4. 查看相机文档
+1. 确保相机已初始化
+2. 将 `ExposureAuto` 设置为 "Off"
+3. 如需要，将 `ExposureMode` 设置为 "Timed"
+4. 查看相机文档以了解型号特定要求
 
 ### Q: 参数设置后没有效果
 
 **可能原因**：
 1. 参数需要相机重启才能生效
-2. 其他参数相互影响
+2. 其他参数相互干扰
 3. 硬件限制
+4. 参数类型错误（浮点数 vs 整数）
 
 **解决方法**：
 1. 重启相机
 2. 检查相关参数设置
-3. 查看相机规格说明
+3. 查看相机规格
+4. 尝试浮点数和整数两种类型
 
 ## 最佳实践
 
-### RGB 相机参数优化
+### RGB 相机曝光优化
 
-1. **曝光时间**：根据场景光照调整，避免过曝与欠曝
-2. **增益**：在曝光不足时适度提高，但会带来噪声
-3. **白平衡**：稳定光源下执行一次自动白平衡
-4. **帧率**：依据算力与需求设定
+1. **场景光照**：根据场景光照条件调整曝光
+2. **避免过曝/欠曝**：找到最佳曝光范围
+3. **帧率考虑**：确保曝光时间不超过帧周期
+4. **步进调整**：使用参数的增量值进行平滑调整
 
-### DVS 相机参数优化
+### 通用参数处理
 
-1. **灵敏度**：依场景动态调整，避免噪声事件过多
-2. **阈值**：平衡事件数量与信息质量
-3. **过滤**：合理使用滤波降低噪声
-4. **带宽**：按应用场景调整事件输出速率
+1. **始终先查询**：设置前检查参数范围
+2. **设置后验证**：读取值以确认已应用
+3. **优雅处理错误**：检查返回状态并处理失败
+4. **查阅文档**：参考制造商文档了解型号特定细节
 
 ## 下一步
 
-掌握参数调整后，你可以：
+掌握曝光时间调整后，你可以：
 
 1. 学习高级同步特性
 2. 了解数据录制与回放

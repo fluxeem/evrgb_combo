@@ -1,362 +1,94 @@
 @page parameter_tuning_tutorial Parameter Tuning Tutorial
 
-This tutorial introduces how to adjust various parameters of RGB and DVS cameras to achieve optimal image quality and performance.
+This tutorial introduces how to adjust RGB camera parameters to achieve optimal image quality and performance.
 
 ## Table of Contents
 
-- [RGB Camera Parameter Tuning](#rgb-camera-parameter-tuning)
-- [DVS Camera Parameter Tuning](#dvs-camera-parameter-tuning)
+- [RGB Camera Exposure Time Adjustment](#rgb-camera-exposure-time-adjustment)
 - [Parameter Query and Verification](#parameter-query-and-verification)
 - [Common Parameter Issues](#common-parameter-issues)
 
-## RGB Camera Parameter Tuning
+## RGB Camera Exposure Time Adjustment
 
-### Exposure Time Adjustment
+The following example demonstrates how to adjust the exposure time of an RGB camera using the Combo interface. This is based on the `rgb_exposure_step_example` sample program.
 
 ```cpp
-#include "camera/rgb_camera.h"
+#include "core/combo.h"
 #include <iostream>
 
+// Helper function to print operation status
 void printStatus(const char* action, const evrgb::CameraStatus& status) {
     if (status.success()) {
-        std::cout << action << " -> Success" << std::endl;
+        std::cout << action << " -> OK" << std::endl;
     } else {
         std::cout << action << " -> " << status.message
-                  << " (error code=0x" << std::hex << std::uppercase << status.code << std::dec << ")" << std::endl;
+                  << " (code=0x" << std::hex << std::uppercase << status.code << std::dec << ")" << std::endl;
     }
 }
 
 int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) {
-        std::cerr << "No RGB camera found" << std::endl;
-        return 1;
-    }
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) {
-        std::cerr << "Camera initialization failed" << std::endl;
-        return 1;
-    }
-
-    // 1. Disable auto exposure
-    auto st_auto = camera.setEnumByName("ExposureAuto", "Off");
-    printStatus("Set Auto Exposure=Off", st_auto);
-
-    // 2. Set exposure mode to Timed
-    auto st_mode = camera.setEnumByName("ExposureMode", "Timed");
-    printStatus("Set Exposure Mode=Timed", st_mode);
-
-    // 3. Query current exposure time
+    // Initialize Combo with RGB camera
+    auto [rgb_cameras, dvs_cameras] = evrgb::enumerateAllCameras();
+    evrgb::Combo combo(rgb_cameras[0].serial_number, "");
+    combo.init();
+    
+    auto rgb_camera = combo.getRgbCamera();
+    
+    // 1. Disable auto exposure for manual control
+    rgb_camera->setEnumByName("ExposureAuto", "Off");
+    rgb_camera->setEnumByName("ExposureMode", "Timed");
+    
+    // 2. Query current exposure time range
     evrgb::FloatProperty exposure{};
-    auto st = camera.getFloat("ExposureTime", exposure);
-    printStatus("Get Exposure Time", st);
-    if (st.success()) {
-        std::cout << "Current exposure time: " << exposure.value << " us"
-                  << " (min=" << exposure.min << ", max=" << exposure.max
-                  << ", step=" << exposure.inc << ")" << std::endl;
-    }
-
-    // 4. Set new exposure time (e.g., 10ms)
-    double target_exposure_us = 10000.0;
-    if (st.success()) {
-        // Limit to camera supported range
-        target_exposure_us = std::max(exposure.min, std::min(exposure.max, target_exposure_us));
-        std::cout << "Setting target exposure time: " << target_exposure_us << " us" << std::endl;
-    }
+    rgb_camera->getFloat("ExposureTime", exposure);
+    std::cout << "Current exposure: " << exposure.value << " us"
+              << " (min=" << exposure.min << ", max=" << exposure.max << ")" << std::endl;
     
-    st = camera.setFloat("ExposureTime", target_exposure_us);
+    // 3. Set new exposure time (clamp to camera limits)
+    double target_exposure_us = 10000.0; // 10ms
+    target_exposure_us = std::max(exposure.min, std::min(exposure.max, target_exposure_us));
+    
+    // Try float first, fallback to integer if needed
+    auto st = rgb_camera->setFloat("ExposureTime", target_exposure_us);
     if (!st.success()) {
-        // Some cameras might require integer type
-        st = camera.setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
+        rgb_camera->setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
     }
-    printStatus("Set Exposure Time", st);
-
-    // 5. Verify setting result
-    st = camera.getFloat("ExposureTime", exposure);
-    if (st.success()) {
-        std::cout << "Actual exposure time: " << exposure.value << " us" << std::endl;
-    }
-
-    camera.destroy();
-    return 0;
-}
-```
-
-### Gain Adjustment
-
-```cpp
-#include "camera/rgb_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) return 1;
-
-    // Disable auto gain
-    auto st = camera.setEnumByName("GainAuto", "Off");
-    std::cout << "Set Auto Gain=Off: " << (st.success() ? "Success" : "Failed") << std::endl;
-
-    // Query current gain
-    evrgb::FloatProperty gain{};
-    st = camera.getFloat("Gain", gain);
-    if (st.success()) {
-        std::cout << "Current gain: " << gain.value 
-                  << " (range: " << gain.min << " - " << gain.max << ")" << std::endl;
-        
-        // Set gain to middle value
-        double new_gain = (gain.min + gain.max) / 2.0;
-        st = camera.setFloat("Gain", new_gain);
-        std::cout << "Set gain=" << new_gain << ": " << (st.success() ? "Success" : "Failed") << std::endl;
-        
-        // Verify setting
-        if (camera.getFloat("Gain", gain)) {
-            std::cout << "Actual gain: " << gain.value << std::endl;
-        }
-    }
-
-    camera.destroy();
-    return 0;
-}
-```
-
-### White Balance Adjustment
-
-```cpp
-#include "camera/rgb_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) return 1;
-
-    // Set white balance mode
-    auto st = camera.setEnumByName("BalanceWhiteAuto", "Once");
-    std::cout << "Execute white balance once: " << (st.success() ? "Success" : "Failed") << std::endl;
-
-    // Wait for white balance to complete
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-
-    // Query white balance parameters
-    evrgb::FloatProperty rb_ratio{}, gb_ratio{};
-    if (camera.getFloat("BalanceRatioRed", rb_ratio) && 
-        camera.getFloat("BalanceRatioGreen", gb_ratio)) {
-        std::cout << "Red/Green ratio: " << rb_ratio.value << std::endl;
-        std::cout << "Green/Blue ratio: " << gb_ratio.value << std::endl;
-    }
-
-    // Manual white balance setting
-    st = camera.setEnumByName("BalanceWhiteAuto", "Off");
-    st = camera.setFloat("BalanceRatioRed", 1.2);
-    st = camera.setFloat("BalanceRatioGreen", 1.0);
-    st = camera.setFloat("BalanceRatioBlue", 1.8);
-    std::cout << "Manual white balance setting: " << (st.success() ? "Success" : "Failed") << std::endl;
-
-    camera.destroy();
-    return 0;
-}
-```
-
-### Image Format and Resolution
-
-```cpp
-#include "camera/rgb_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) return 1;
-
-    // Query supported image formats
-    evrgb::EnumProperty pixel_format{};
-    if (camera.getEnum("PixelFormat", pixel_format)) {
-        std::cout << "Current pixel format: " << pixel_format.value << std::endl;
-        std::cout << "Supported formats: ";
-        for (const auto& entry : pixel_format.entries) {
-            std::cout << entry << " ";
-        }
-        std::cout << std::endl;
-    }
-
-    // Set pixel format
-    auto st = camera.setEnumByName("PixelFormat", "BGR8");
-    std::cout << "Set BGR8 format: " << (st.success() ? "Success" : "Failed") << std::endl;
-
-    // Query and set resolution
-    evrgb::IntProperty width{}, height{};
-    if (camera.getInt("Width", width) && camera.getInt("Height", height)) {
-        std::cout << "Current resolution: " << width.value << "x" << height.value << std::endl;
-        
-        // Set new resolution (if supported)
-        st = camera.setInt("Width", 1280);
-        st = camera.setInt("Height", 720);
-        std::cout << "Set 1280x720 resolution: " << (st.success() ? "Success" : "Failed") << std::endl;
-    }
-
-    camera.destroy();
-    return 0;
-}
-```
-
-## DVS Camera Parameter Tuning
-
-### Bias Parameter Adjustment
-
-```cpp
-#include "camera/dvs_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllDvsCameras();
-    if (cameras.empty()) {
-        std::cerr << "No DVS camera found" << std::endl;
-        return 1;
-    }
-
-    evrgb::DvsCamera camera;
-    if (!camera.initialize(cameras[0].serial)) {
-        std::cerr << "DVS camera initialization failed" << std::endl;
-        return 1;
-    }
-
-    // Set bias parameters
-    evrgb::CameraStatus status;
     
-    // 1. Set sensitivity
-    status = camera.setFloat("sensitivity", 0.5);
-    std::cout << "Set sensitivity=0.5: " << (status.success() ? "Success" : "Failed") << std::endl;
-
-    // 2. Set threshold
-    status = camera.setFloat("threshold", 0.3);
-    std::cout << "Set threshold=0.3: " << (status.success() ? "Success" : "Failed") << std::endl;
-
-    // 3. Set refractory period
-    status = camera.setFloat("refractory_period", 1.0);
-    std::cout << "Set refractory period=1.0: " << (status.success() ? "Success" : "Failed") << std::endl;
-
-    // 4. Set bandwidth
-    status = camera.setFloat("bandwidth", 0.9);
-    std::cout << "Set bandwidth=0.9: " << (status.success() ? "Success" : "Failed") << std::endl;
-
-    camera.destroy();
+    // 4. Verify the setting
+    rgb_camera->getFloat("ExposureTime", exposure);
+    std::cout << "Applied exposure: " << exposure.value << " us" << std::endl;
+    
+    combo.destroy();
     return 0;
 }
 ```
 
-### Event Filter Configuration
+### Key Points for Exposure Time Adjustment
 
-```cpp
-#include "camera/dvs_camera.h"
-#include <iostream>
-
-int main() {
-    auto cameras = evrgb::enumerateAllDvsCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::DvsCamera camera;
-    if (!camera.initialize(cameras[0].serial)) return 1;
-
-    // Set region filter
-    auto status = camera.setBool("region_filter", true);
-    std::cout << "Enable region filter: " << (status.success() ? "Success" : "Failed") << std::endl;
-
-    // Set noise filter
-    status = camera.setBool("noise_filter", true);
-    std::cout << "Enable noise filter: " << (status.success() ? "Success" : "Failed") << std::endl;
-
-    // Set ROI (Region of Interest)
-    status = camera.setInt("roi_x", 100);
-    status = camera.setInt("roi_y", 100);
-    status = camera.setInt("roi_width", 300);
-    status = camera.setInt("roi_height", 300);
-    std::cout << "Set ROI: " << (status.success() ? "Success" : "Failed") << std::endl;
-
-    camera.destroy();
-    return 0;
-}
-```
+1. **Disable Auto Exposure**: Set `ExposureAuto` to "Off" before manual control
+2. **Set Exposure Mode**: Some cameras require `ExposureMode` to be "Timed"
+3. **Query Parameter Range**: Always check min/max values before setting
+4. **Handle Different Types**: Some cameras expose `ExposureTime` as float, others as integer
+5. **Verify Settings**: Read back the value to confirm it was applied correctly
 
 ## Parameter Query and Verification
 
-### Generic Parameter Query Functions
+### Querying Parameter Information
 
 ```cpp
-#include "camera/rgb_camera.h"
-#include <iostream>
-
-void printFloatProperty(evrgb::HikvisionRgbCamera& camera, const std::string& name) {
-    evrgb::FloatProperty prop;
-    if (camera.getFloat(name, prop)) {
-        std::cout << name << ": " << prop.value 
-                  << " (range: " << prop.min << " - " << prop.max
-                  << ", step: " << prop.inc << ")" << std::endl;
-    } else {
-        std::cout << name << ": Unable to get" << std::endl;
-    }
-}
-
-void printIntProperty(evrgb::HikvisionRgbCamera& camera, const std::string& name) {
-    evrgb::IntProperty prop;
-    if (camera.getInt(name, prop)) {
-        std::cout << name << ": " << prop.value 
-                  << " (range: " << prop.min << " - " << prop.max
-                  << ", step: " << prop.inc << ")" << std::endl;
-    } else {
-        std::cout << name << ": Unable to get" << std::endl;
-    }
-}
-
-void printEnumProperty(evrgb::HikvisionRgbCamera& camera, const std::string& name) {
-    evrgb::EnumProperty prop;
-    if (camera.getEnum(name, prop)) {
-        std::cout << name << ": " << prop.value << std::endl;
-        std::cout << "  Available values: ";
-        for (const auto& entry : prop.entries) {
-            std::cout << entry << " ";
-        }
-        std::cout << std::endl;
-    } else {
-        std::cout << name << ": Unable to get" << std::endl;
-    }
-}
-
-int main() {
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) return 1;
-
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(cameras[0].serial_number)) return 1;
-
-    std::cout << "=== RGB Camera Parameter Information ===" << std::endl;
-
-    // Float parameters
-    printFloatProperty(camera, "ExposureTime");
-    printFloatProperty(camera, "Gain");
-    printFloatProperty(camera, "AcquisitionFrameRate");
-
-    // Integer parameters
-    printIntProperty(camera, "Width");
-    printIntProperty(camera, "Height");
-    printIntProperty(camera, "PayloadSize");
-
-    // Enum parameters
-    printEnumProperty(camera, "PixelFormat");
-    printEnumProperty(camera, "ExposureAuto");
-    printEnumProperty(camera, "GainAuto");
-
-    camera.destroy();
-    return 0;
+// Query exposure time range and current value
+evrgb::FloatProperty exposure{};
+auto st = rgb_camera->getFloat("ExposureTime", exposure);
+if (st.success()) {
+    std::cout << "Current exposure: " << exposure.value << " us"
+              << " (min=" << exposure.min << ", max=" << exposure.max
+              << ", inc=" << exposure.inc << ")" << std::endl;
 }
 ```
+
+### Other Parameters
+
+For other parameters such as gain, white balance, pixel format, resolution, and DVS camera parameters, please refer to the manufacturer's documentation for your specific camera model. The EvRGB Combo SDK provides generic interfaces to access these parameters, but the exact parameter names and supported values vary by camera model.
 
 ## Common Parameter Issues
 
@@ -367,20 +99,22 @@ int main() {
 2. Camera doesn't support the parameter
 3. Camera is in error state
 4. Insufficient permissions
+5. Auto mode needs to be disabled first
 
 **Solutions**:
 1. Query parameter range before setting value
 2. Check camera model supported features
 3. Reinitialize camera
 4. Ensure sufficient permissions
+5. Disable auto parameters before manual control
 
-### Q: Unable to disable auto parameters
+### Q: Unable to disable auto exposure
 
 **Solution steps**:
-1. Ensure camera is started
-2. Disable auto parameters in correct order
-3. Check if camera supports manual mode
-4. Check camera documentation
+1. Ensure camera is initialized
+2. Set `ExposureAuto` to "Off"
+3. Set `ExposureMode` to "Timed" if required
+4. Check camera documentation for model-specific requirements
 
 ### Q: No effect after parameter setting
 
@@ -388,31 +122,33 @@ int main() {
 1. Parameter requires camera restart to take effect
 2. Other parameters are interfering
 3. Hardware limitations
+4. Wrong parameter type (float vs integer)
 
 **Solutions**:
 1. Restart camera
 2. Check related parameter settings
 3. Review camera specifications
+4. Try both float and integer types
 
 ## Best Practices
 
-### RGB Camera Parameter Optimization
+### RGB Camera Exposure Optimization
 
-1. **Exposure Time**: Adjust based on scene lighting, avoid overexposure and underexposure
-2. **Gain**: Increase appropriately when exposure time is insufficient, but introduces noise
-3. **White Balance**: Execute auto white balance once under stable lighting
-4. **Frame Rate**: Set based on processing capability and requirements
+1. **Scene Lighting**: Adjust exposure based on scene lighting conditions
+2. **Avoid Over/Under Exposure**: Find the optimal exposure range
+3. **Frame Rate Consideration**: Ensure exposure time doesn't exceed frame period
+4. **Step Adjustment**: Use the parameter's increment value for smooth adjustments
 
-### DVS Camera Parameter Optimization
+### General Parameter Handling
 
-1. **Sensitivity**: Adjust based on scene dynamics, avoid too many noise events
-2. **Threshold**: Balance event count and information quality
-3. **Filtering**: Use filtering functions appropriately to reduce noise
-4. **Bandwidth**: Adjust event output rate based on application scenario
+1. **Always Query First**: Check parameter range before setting
+2. **Verify After Setting**: Read back to confirm the value was applied
+3. **Handle Errors Gracefully**: Check return status and handle failures
+4. **Consult Documentation**: Refer to manufacturer docs for model-specific details
 
 ## Next Steps
 
-After mastering parameter tuning, you can:
+After mastering exposure time adjustment, you can:
 
 1. Learn advanced synchronization features
 2. Understand data recording and playback
