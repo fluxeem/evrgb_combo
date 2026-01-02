@@ -58,7 +58,8 @@ int main(int argc, char* argv[])
     evrgb::RecordedSyncReader::Sample sample;
     reader.next(sample); // Preload first sample to set initial timestamps
     dvsense::Event2DVector::const_iterator it_start, it_end;
-    cv::Mat view = sample.rgb.clone();
+    cv::Mat last_frame = sample.rgb.clone();
+    cv::Mat view = last_frame.clone();
 
     while (true) {
         if (sample.rgb.empty()) {
@@ -88,7 +89,8 @@ int main(int argc, char* argv[])
                 remianing_events->end(),
                 it_start,
                 it_end);
-            view = sample.rgb.clone();
+            last_frame = sample.rgb.clone();
+            view = last_frame.clone();
             if (!reader.next(sample)) {
                 break;
             }
@@ -102,7 +104,7 @@ int main(int argc, char* argv[])
             (replay_status.slowmo_active ? replay_status.slowmo_factor : 1);
         replay_status.current_ts_us += step_us;
         
-
+        view = last_frame.clone();
         if (remianing_events && !remianing_events->empty()) {
             overlayEvents(view, remianing_events);
             remianing_events->clear();
