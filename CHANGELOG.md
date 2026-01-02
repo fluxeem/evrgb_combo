@@ -22,8 +22,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.1] - 2026-01-02
 
+### Added
+- Comprehensive changelog system following Keep a Changelog standard
+- Chinese version of changelog in documentation/zh/CHANGELOG.md
+- Enhanced RecordedSyncReader interface with new functionality
+- Improved documentation cross-references
+
 ### Changed
-- Updated version number to 1.0.1
+- Updated version number from 1.0.0 to 1.0.1
+- Refactored sample code structure:
+  - Moved example implementations to subdirectories
+  - Removed duplicate example files from root sample directory
+- Updated documentation references in README.md and HOME_PAGE.md
+- Enhanced PARAMETER_TUNING_TUTORIAL.md content for both English and Chinese versions
+- Improved RecordedSyncReader implementation with additional features
+
+### Fixed
+- Documentation structure and cross-references
+- Sample code organization and build configuration
 
 ## [1.0.0] - 2025-01-02
 
@@ -75,7 +91,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CPack support for package generation
 - FindMVS.cmake module for Hikrobot MVS SDK integration
 - Automated dependency management
-
-[Unreleased]: https://github.com/fluxeem/evrgb_combo/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/fluxeem/evrgb_combo/releases/tag/v1.0.1
-[1.0.0]: https://github.com/fluxeem/evrgb_combo/releases/tag/v1.0.0
