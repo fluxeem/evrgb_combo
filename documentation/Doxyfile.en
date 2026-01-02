@@ -89,7 +89,7 @@ GENERATE_TODOLIST      = YES
 GENERATE_TESTLIST      = YES
 GENERATE_BUGLIST       = YES
 GENERATE_DEPRECATEDLIST= YES
-ENABLED_SECTIONS       = 
+ENABLED_SECTIONS       = ENGLISH
 MAX_INITIALIZER_LINES  = 30
 SHOW_USED_FILES        = YES
 SHOW_FILES             = YES
@@ -170,7 +170,6 @@ EXCLUDE                = build \
                          include/combo_threads.h \
                          include/event_vector_pool.h \
                          include/evrgb_logger.h \
-                         include/recorded_sync_reader.h \
                          documentation/zh \
                          documentation/README_CN.md
 EXCLUDE_SYMLINKS       = NO
@@ -178,7 +177,6 @@ EXCLUDE_PATTERNS       = */trigger_buffer* \
                          */combo_threads* \
                          */event_vector_pool* \
                          */evrgb_logger* \
-                         */recorded_sync_reader* \
                          */zh/* \
                          */README_CN.md 
 EXCLUDE_SYMBOLS        = 
