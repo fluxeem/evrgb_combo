@@ -45,7 +45,13 @@ EVRGB_API std::tuple<std::vector<RgbCameraInfo>, std::vector<dvsense::CameraDesc
 
 class EVRGB_API Combo {
 public:
-    Combo(std::string rgb_serial = "", std::string dvs_serial = "", size_t max_buffer_size = 10);
+
+    enum class Arrangement {
+        STEREO = 0,
+        BEAM_SPLITTER = 1
+    };
+
+    Combo(std::string rgb_serial = "", std::string dvs_serial = "", Arrangement arrangement = Arrangement::STEREO, size_t max_buffer_size = 10);
     ~Combo();
 
     // Disable copy (manages device resources)
@@ -155,6 +161,19 @@ public:
      */
     bool stopRecording();
 
+    /**
+     * #if ENGLISH
+     * @brief Get the arrangement mode of the combo camera.
+     * @return Arrangement mode.
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取组合相机的排列模式。
+     * @return 排列模式。
+     * #endif
+     */
+    Arrangement getArrangement() const { return arrangement_; }
+
 private:
     std::string rgb_serial_;
     std::string dvs_serial_;
@@ -163,6 +182,8 @@ private:
     bool dvs_camera_created_ = false; // flag to track if DVS camera was created
     bool rgb_initialized_ = false;
     bool dvs_initialized_ = false;
+
+    Arrangement arrangement_;
     
     // RGB image buffer with index
     struct ImageWithIndex {
@@ -238,6 +259,8 @@ private:
     
     bool synchronizeImageAndTrigger(cv::Mat& image, uint64_t& exposure_start_ts, uint64_t& exposure_end_ts, uint32_t& image_index);
 };
+
+const std::string EVRGB_API toString(Combo::Arrangement arrangement);
 
 }  // namespace evrgb
 

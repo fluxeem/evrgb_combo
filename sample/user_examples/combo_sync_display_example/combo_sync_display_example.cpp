@@ -226,7 +226,7 @@ int main() {
     std::cout << "Using RGB: " << rgb_serial << std::endl;
     std::cout << "Using DVS: " << dvs_serial << std::endl;
 
-    evrgb::Combo combo(rgb_serial, dvs_serial, 100);
+    evrgb::Combo combo(rgb_serial, dvs_serial,  evrgb::Combo::Arrangement::STEREO, 100);
 
     evrgb::SyncedRecorderConfig recorder_cfg;
     recorder_cfg.output_dir = "recordings";

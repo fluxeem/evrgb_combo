@@ -15,9 +15,10 @@ std::tuple<std::vector<RgbCameraInfo>, std::vector<dvsense::CameraDescription>> 
     return std::make_tuple(rgb_cameras, dvs_cameras);
 }
 
-Combo::Combo(std::string rgb_serial, std::string dvs_serial, size_t max_buffer_size)
+Combo::Combo(std::string rgb_serial, std::string dvs_serial, Arrangement arrangement, size_t max_buffer_size)
     : rgb_serial_(std::move(rgb_serial))
     , dvs_serial_(std::move(dvs_serial))
+    , arrangement_(arrangement)
     , max_rgb_buffer_size_(max_buffer_size)
     , trigger_buffer_(std::make_unique<TriggerBuffer>(100))
     , event_vector_pool_(std::max(max_buffer_size, Combo::kDefaultEventPoolPreallocation), Combo::kDefaultEventPoolCapacity)
@@ -392,6 +393,18 @@ bool Combo::removeDvsEventCallback(uint32_t callback_id)
     }
 
     return false;
+}
+
+const std::string EVRGB_API toString(Combo::Arrangement arrangement)
+{
+    switch (arrangement) {
+            case Combo::Arrangement::STEREO:
+                return "STEREO";
+            case Combo::Arrangement::BEAM_SPLITTER:
+                return "BEAM_SPLITTER";
+            default:
+                return "UNKNOWN";
+        }
 }
 
 }  // namespace evrgb
