@@ -53,6 +53,9 @@ public:
     cv::Vec3b onColor() const;
     cv::Vec3b offColor() const;
 
+    void setFlipX(bool flip);
+    bool flipX() const;
+
     bool updateRgbFrame(const cv::Mat& rgb_frame);
 
     bool visualizeEvents(
@@ -79,6 +82,7 @@ private:
     cv::Vec3b off_color_;
     DisplayMode display_mode_{DisplayMode::Overlay};
     cv::Point2i manual_offset_{0, 0};
+    bool flip_x_{false};
     cv::Mat rgb_frame_;
     
     // 线程安全

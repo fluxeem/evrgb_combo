@@ -64,6 +64,14 @@ void EventVisualizer::setColors(const cv::Vec3b& on_color, const cv::Vec3b& off_
 cv::Vec3b EventVisualizer::onColor() const { return on_color_; }
 cv::Vec3b EventVisualizer::offColor() const { return off_color_; }
 
+void EventVisualizer::setFlipX(bool flip) {
+    flip_x_ = flip;
+}
+
+bool EventVisualizer::flipX() const {
+    return flip_x_;
+}
+
 bool EventVisualizer::updateRgbFrame(const cv::Mat& rgb_frame) {
     if (rgb_frame.empty()) {
         return false;
@@ -132,7 +140,10 @@ bool EventVisualizer::overlayEvents(
 
     for (auto it = begin; it != end; ++it) {
         const auto& e = *it;
-        const int x = static_cast<int>(e.x * scale) + offset.x;
+        const float source_x = (flip_x_ && event_size_.width > 0)
+            ? (static_cast<float>(event_size_.width - 1) - e.x)
+            : e.x;
+        const int x = static_cast<int>(source_x * scale) + offset.x;
         const int y = static_cast<int>(e.y * scale) + offset.y;
         if (x < 0 || y < 0 || x >= output_frame.cols || y >= output_frame.rows) {
             continue;

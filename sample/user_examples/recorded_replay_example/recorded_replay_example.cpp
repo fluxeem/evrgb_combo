@@ -28,7 +28,7 @@ int main(int argc, char* argv[])
     const std::string recording_dir = (argc > 1) ? argv[1] : "recordings";
 
     std::cout << "Usage: " << argv[0] << " [recording_dir]\n"
-              << "Controls: q/Esc to quit, m to toggle display mode, space to toggle slow-mo."
+              << "Controls: q/Esc to quit, m to toggle display mode, f to flip X, space to toggle slow-mo."
               << std::endl;
 
     evrgb::RecordedSyncReader reader({recording_dir});
@@ -125,6 +125,10 @@ int main(int argc, char* argv[])
             auto mode = canvas.toggleDisplayMode();
             std::cout << "Display mode switched to "
                       << (mode == evrgb::EventVisualizer::DisplayMode::Overlay ? "OVERLAY." : "SIDE_BY_SIDE.") << std::endl;
+        } else if ((key & 0xff) == 'f' || (key & 0xff) == 'F') {
+            const bool current_flip = canvas.flipX();
+            canvas.setFlipX(!current_flip);
+            std::cout << "Flip X " << (!current_flip ? "enabled." : "disabled.") << std::endl;
         } else if ((key & 0xff) == ' ') {
             replay_status.slowmo_active = !replay_status.slowmo_active;
             std::cout << "Slow-mo " << (replay_status.slowmo_active ? "activated." : "deactivated.") << std::endl;
