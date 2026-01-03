@@ -70,6 +70,43 @@ public:
      */
     std::optional<dvsense::TimeStamp> getRecordingStartTimeUs() const;
 
+    /**
+     * \if ENGLISH
+     * @brief Get the RGB frame size.
+     * @return cv::Size2i  The size of the RGB frames.
+     * \endif
+     *
+     * \if CHINESE
+     * @brief 获取 RGB 帧大小。
+     * @return cv::Size2i  RGB 帧的尺寸。
+     * \endif
+     */
+    const cv::Size2i getRgbFrameSize() const;
+
+    /**
+     * \if ENGLISH
+     * @brief Get the Event frame size.
+     * @return cv::Size2i  The size of the Event frames.
+     * \endif
+     *
+     * \if CHINESE
+     * @brief 获取事件帧大小。
+     * @return cv::Size2i  事件帧的尺寸。
+     * \endif
+     */
+    const cv::Size2i getEventFrameSize() const;
+
+    /**
+     * \if ENGLISH
+     * @brief Get the Frame Count object
+     * @return size_t  The total number of frames in the recording.
+     * \endif
+     * 
+     * \if CHINESE
+     * @brief 获取帧数对象
+     * @return size_t  录制中的总帧数。
+     * \endif
+     */
     size_t frameCount() const;
     bool isOpen() const;
 

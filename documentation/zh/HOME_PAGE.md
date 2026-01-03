@@ -47,6 +47,7 @@ make -j$(nproc)      # Linux/macOS
 | 教程索引 | https://sdk.fluxeem.com/evrgb_combo/zh/docs/tutorial_index.html |
 | 示例指南 | https://sdk.fluxeem.com/evrgb_combo/zh/docs/samples_guide.html |
 | API 参考 | https://sdk.fluxeem.com/evrgb_combo/zh/docs/annotated.html |
+| 更新日志 | [📝 版本历史](../../../CHANGELOG.md) |
 
 ## 🛠️ 构建选项
 

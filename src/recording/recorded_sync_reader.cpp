@@ -100,6 +100,26 @@ bool RecordedSyncReader::isOpen() const
     return opened_;
 }
 
+const cv::Size2i RecordedSyncReader::getRgbFrameSize() const
+{
+    if (cap_.isOpened()) {
+        int width = static_cast<int>(cap_.get(cv::CAP_PROP_FRAME_WIDTH));
+        int height = static_cast<int>(cap_.get(cv::CAP_PROP_FRAME_HEIGHT));
+        return cv::Size2i(width, height);
+    }
+    return cv::Size2i(0, 0);
+}
+
+const cv::Size2i RecordedSyncReader::getEventFrameSize() const
+{
+    if (dvs_reader_) {
+        int width = dvs_reader_->getWidth();
+        int height = dvs_reader_->getHeight();
+        return cv::Size2i(width, height);
+    }
+    return cv::Size2i(0, 0);
+}
+
 std::filesystem::path RecordedSyncReader::resolve(const std::string& name) const
 {
     return std::filesystem::path(paths_.recording_dir) / name;

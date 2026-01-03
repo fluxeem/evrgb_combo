@@ -1,7 +1,7 @@
-#include "camera/rgb_camera.h"
+#include "core/combo.h"
 #include <iostream>
 #include <iomanip>
-#include <optional>
+#include <mutex>
 
 #ifdef _WIN32
     #include "opencv2/opencv.hpp"
@@ -28,32 +28,49 @@ int main(int argc, char* argv[]) {
     std::cout << "EvRGB Combo SDK Sample - RGB Exposure Step Example" << std::endl;
     std::cout << "Usage: rgb_exposure_step_example [exposure_us]" << std::endl;
 
-    auto cameras = evrgb::enumerateAllRgbCameras();
-    if (cameras.empty()) {
+    auto [rgb_cameras, dvs_cameras] = evrgb::enumerateAllCameras();
+    if (rgb_cameras.empty()) {
         std::cerr << "No RGB camera found." << std::endl;
         return 1;
     }
 
-    const std::string serial = cameras[0].serial_number;
-    std::cout << "Opening RGB camera: " << serial << std::endl;
+    const std::string rgb_serial = rgb_cameras[0].serial_number;
+    const std::string dvs_serial = dvs_cameras.empty() ? "" : dvs_cameras[0].serial;
+    std::cout << "Opening Combo with RGB serial: " << rgb_serial << std::endl;
+    if (!dvs_serial.empty()) {
+        std::cout << "Using DVS serial (optional): " << dvs_serial << std::endl;
+    } else {
+        std::cout << "No DVS selected (RGB-only)." << std::endl;
+    }
 
-    evrgb::HikvisionRgbCamera camera;
-    if (!camera.initialize(serial)) {
-        std::cerr << "Initialize failed." << std::endl;
+    evrgb::Combo combo(rgb_serial, dvs_serial);
+    if (!combo.init()) {
+        std::cerr << "Combo initialization failed." << std::endl;
         return 1;
     }
 
+    auto rgb_camera = combo.getRgbCamera();
+    if (!rgb_camera) {
+        std::cerr << "RGB camera handle unavailable." << std::endl;
+        return 1;
+    }
+
+    evrgb::CameraStatus ret_status;
+
     // Disable auto exposure so manual writes succeed on most Hikrobot models
-    auto st_auto = camera.setEnumByName("ExposureAuto", "Off");
-    printStatus("Set ExposureAuto=Off", st_auto);
+    ret_status = rgb_camera->setEnumByName("ExposureAuto", "Off");
+    printStatus("Set ExposureAuto=Off", ret_status);
 
     // Some devices require ExposureMode to be Timed for manual control
-    auto st_mode = camera.setEnumByName("ExposureMode", "Timed");
-    printStatus("Set ExposureMode=Timed", st_mode);
+    ret_status = rgb_camera->setEnumByName("ExposureMode", "Timed");
+    printStatus("Set ExposureMode=Timed", ret_status);
+
+    ret_status = rgb_camera->setInt("AutoExposureTimeUpperLimit", static_cast<int64_t>(500000)); // 500 ms
+    printStatus("Set AutoExposureTimeUpperLimit=500000", ret_status);
 
     // Query current exposure
     evrgb::FloatProperty exposure{};
-    auto st = camera.getFloat("ExposureTime", exposure);
+    auto st = rgb_camera->getFloat("ExposureTime", exposure);
     printStatus("Get ExposureTime", st);
     if (st.success()) {
         std::cout << "Current exposure: " << exposure.value << " us"
@@ -66,33 +83,48 @@ int main(int argc, char* argv[]) {
         if (target_exposure_us < exposure.min) target_exposure_us = exposure.min;
         if (target_exposure_us > exposure.max) target_exposure_us = exposure.max;
     }
-    st = camera.setFloat("ExposureTime", target_exposure_us);
+    st = rgb_camera->setFloat("ExposureTime", target_exposure_us);
     if (!st.success()) {
         // Fallback: some cameras expose ExposureTime as integer
-        st = camera.setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
+        st = rgb_camera->setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
     }
     printStatus("Set ExposureTime", st);
 
     // Re-read to show actual applied value
-    st = camera.getFloat("ExposureTime", exposure);
+    st = rgb_camera->getFloat("ExposureTime", exposure);
     if (st.success()) {
         std::cout << "Applied exposure: " << exposure.value << " us" << std::endl;
     }
 
-    if (!camera.start()) {
-        std::cerr << "Start failed." << std::endl;
+    cv::namedWindow("RGB Exposure", cv::WINDOW_AUTOSIZE);
+
+    // Pull frames from Combo via callback to demonstrate Combo usage
+    cv::Mat latest_frame;
+    std::mutex frame_mutex;
+    combo.setRgbImageCallback([&](const cv::Mat& frame) {
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        frame.copyTo(latest_frame);
+    });
+
+    if (!combo.start()) {
+        std::cerr << "Combo start failed." << std::endl;
         return 1;
     }
 
     std::cout << "Streaming... press +/- to adjust exposure step, q or ESC to quit." << std::endl;
 
-    cv::namedWindow("RGB Exposure", cv::WINDOW_AUTOSIZE);
-
     double step = (exposure.inc > 0.0) ? exposure.inc : 500.0; // fallback 0.5 ms
 
     while (true) {
         cv::Mat frame;
-        if (camera.getLatestImage(frame)) {
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+            if (!latest_frame.empty()) {
+                frame = latest_frame.clone();
+            }
+        }
+
+        if (!frame.empty()) {
             cv::imshow("RGB Exposure", frame);
         }
 
@@ -103,28 +135,28 @@ int main(int argc, char* argv[]) {
 
         if (key == '+' || key == '=') {
             target_exposure_us = std::min(exposure.max, exposure.value + step);
-            st = camera.setFloat("ExposureTime", target_exposure_us);
+            st = rgb_camera->setFloat("ExposureTime", target_exposure_us);
             if (!st.success()) {
-                st = camera.setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
+                st = rgb_camera->setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
             }
             printStatus("Set ExposureTime (+)", st);
-            camera.getFloat("ExposureTime", exposure);
+            rgb_camera->getFloat("ExposureTime", exposure);
             std::cout << "Exposure now: " << exposure.value << " us" << std::endl;
         }
 
         if (key == '-' || key == '_') {
             target_exposure_us = std::max(exposure.min, exposure.value - step);
-            st = camera.setFloat("ExposureTime", target_exposure_us);
+            st = rgb_camera->setFloat("ExposureTime", target_exposure_us);
             if (!st.success()) {
-                st = camera.setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
+                st = rgb_camera->setInt("ExposureTime", static_cast<int64_t>(target_exposure_us));
             }
-            camera.getFloat("ExposureTime", exposure);
+            rgb_camera->getFloat("ExposureTime", exposure);
             std::cout << "Exposure now: " << exposure.value << " us" << std::endl;
         }
     }
 
-    camera.stop();
-    camera.destroy();
+    combo.stop();
+    combo.destroy();
     cv::destroyAllWindows();
     return 0;
 }
