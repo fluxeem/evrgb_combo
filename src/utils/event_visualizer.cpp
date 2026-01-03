@@ -46,12 +46,6 @@ cv::Point2i EventVisualizer::eventOffset() const {
     return manual_offset_;
 }
 
-cv::Point2i EventVisualizer::adjustEventOffset(const cv::Point2i& delta) {
-    manual_offset_.x += delta.x;
-    manual_offset_.y += delta.y;
-    return manual_offset_;
-}
-
 void EventVisualizer::setEventOffset(const cv::Point2i& offset) {
     manual_offset_ = offset;
 }
