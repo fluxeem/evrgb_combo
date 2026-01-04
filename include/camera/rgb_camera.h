@@ -5,9 +5,9 @@
 #ifndef EVRGB_RGB_CAMERA_H_
 #define EVRGB_RGB_CAMERA_H_
 
-#include <vector>
-#include <string>
 #include <optional>
+#include <string>
+#include <vector>
 #ifdef _WIN32
     #include "opencv2/opencv.hpp"
 #else
@@ -15,6 +15,7 @@
 #endif
 
 #include "camera/i_camera.h"
+#include "utils/calib_info.h"
 
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
@@ -28,28 +29,6 @@
 
 namespace evrgb
 {
-
-/// @brief RGB camera information structure
-struct EVRGB_API RgbCameraInfo
-{
-    /// Manufacturer name (null-terminated)
-    char manufacturer[64] = {};
-
-    /// Camera serial number (null-terminated)
-    char serial_number[64] = {};
-
-    /// Image width in pixels
-    unsigned int width = 0;
-
-    /// Image height in pixels
-    unsigned int height = 0;
-};
-
-/**
- * @brief Enumerate all available RGB cameras
- * @return A vector of RgbCameraInfo describing each discovered camera
- */
-EVRGB_API std::vector<RgbCameraInfo> enumerateAllRgbCameras();
 
 /**
  * @brief Hikvision RGB camera implementation
@@ -122,6 +101,32 @@ public:
     unsigned int getWidth() const override;
     unsigned int getHeight() const override;
 
+    /**
+     * #if ENGLISH
+     * @brief Set camera intrinsics calibration
+     * @param intrinsics Camera intrinsics parameters
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 设置相机内参标定
+     * @param intrinsics 相机内参参数
+     * #endif
+     */
+    void setIntrinsics(const CameraIntrinsics& intrinsics) override;
+    
+    /**
+     * #if ENGLISH
+     * @brief Get camera intrinsics calibration
+     * @return Optional camera intrinsics parameters
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取相机内参标定
+     * @return 可选的相机内参参数
+     * #endif
+     */
+    std::optional<CameraIntrinsics> getIntrinsics() const override;
+
     // Property access (typed)
     CameraStatus getInt(const std::string& key, IntProperty& out) override;
     CameraStatus setInt(const std::string& key, int64_t value) override;
@@ -171,6 +176,8 @@ private:
     
     unsigned int width_ = 0;
     unsigned int height_ = 0;
+
+    std::optional<CameraIntrinsics> intrinsics_;
 
     /**
      * @brief Find whether a camera with given serial exists

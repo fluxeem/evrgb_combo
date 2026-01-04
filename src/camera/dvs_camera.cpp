@@ -1,5 +1,6 @@
 #include "camera/dvs_camera.h"
 #include "utils/evrgb_logger.h"
+#include "utils/calib_info.h"
 #include <algorithm>
 
 namespace evrgb
@@ -334,6 +335,16 @@ bool DvsCamera::getDeviceModelName(std::string& model_name)
 
     model_name = dvs_camera_->getDescription().product;
     return true;
+}
+
+void DvsCamera::setIntrinsics(const CameraIntrinsics& intrinsics)
+{
+    intrinsics_ = intrinsics;
+}
+
+std::optional<CameraIntrinsics> DvsCamera::getIntrinsics() const
+{
+    return intrinsics_;
 }
 
 }  // namespace evrgb
