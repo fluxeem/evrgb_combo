@@ -98,16 +98,29 @@ public:
 
     /**
      * #if ENGLISH
-     * @brief Get the DVS camera interface
-     * @return Shared pointer to the DVS camera interface
+     * @brief Get the managed DVS camera wrapper
+     * @return Shared pointer to the wrapper DVS camera interface
      * #endif
      * 
      * #if CHINESE
-     * @brief 获取DVS相机接口
-     * @return DVS相机接口的共享指针
+     * @brief 获取封装的 DVS 相机对象
+     * @return 封装 DVS 相机的共享指针
      * #endif
      */
-    std::shared_ptr<dvsense::DvsCamera> getDvsCamera() const { return dvs_camera_.getDvsCamera(); }
+    std::shared_ptr<DvsCamera> getDvsCamera() const { return dvs_camera_; }
+
+    /**
+     * #if ENGLISH
+     * @brief Get the raw DVS camera handle from the wrapper
+     * @return Shared pointer to the underlying DVS camera interface
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取底层原始 DVS 相机句柄
+     * @return 底层 DVS 相机接口的共享指针
+     * #endif
+     */
+    std::shared_ptr<dvsense::DvsCamera> getRawDvsCamera() const { return dvs_camera_ ? dvs_camera_->getDvsCamera() : nullptr; }
 
     /**
      * @brief Get the number of images in the RGB buffer.
@@ -193,7 +206,7 @@ private:
     std::string rgb_model_;
     std::string dvs_model_;
     std::shared_ptr<IRgbCamera> rgb_camera_;                // managed RGB camera instance
-    DvsCamera dvs_camera_; // managed DVS camera (if initialized)
+    std::shared_ptr<DvsCamera> dvs_camera_; // managed DVS camera (if initialized)
     bool dvs_camera_created_ = false; // flag to track if DVS camera was created
     bool rgb_initialized_ = false;
     bool dvs_initialized_ = false;

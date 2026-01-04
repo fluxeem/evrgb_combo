@@ -25,26 +25,6 @@ Combo::Combo(std::string rgb_serial, std::string dvs_serial, Arrangement arrange
 {
     LOG_INFO("Creating Combo (rgb_serial='%s', dvs_serial='%s', max_buffer_size='%zu')", rgb_serial_.c_str(), dvs_serial_.c_str(), max_buffer_size);
     init();
-
-    // rgb_camera_ = std::make_shared<HikvisionRgbCamera>();
-
-    // if (rgb_camera_->initialize(rgb_serial_)) {
-    //     rgb_initialized_ = true;
-    // } else {
-    //     LOG_WARN("RGB camera initialization failed (serial='%s')", rgb_serial_.c_str());
-    // }
-
-    // if (!dvs_serial_.empty()) {
-    //     if (dvs_camera_.initialize(dvs_serial_)) {
-    //         dvs_initialized_ = true;
-    //         dvs_camera_created_ = true;
-    //     } else {
-    //         LOG_WARN("DVS camera initialization failed (serial='%s')", dvs_serial_.c_str());
-    //     }
-    // } else {
-    //     LOG_WARN("DVS camera initialization failed (no serial provided)");
-    // }
-
 }
 
 Combo::~Combo()
@@ -57,8 +37,8 @@ Combo::~Combo()
         rgb_initialized_ = false;
     }
 
-    if (dvs_camera_created_) {
-        dvs_camera_.destroy();
+    if (dvs_camera_created_ && dvs_camera_) {
+        dvs_camera_->destroy();
         dvs_initialized_ = false;
     }
 }
@@ -85,12 +65,13 @@ bool Combo::init()
     }
 
     if (!dvs_initialized_ && !dvs_serial_.empty()) {
-        if (dvs_camera_.initialize(dvs_serial_)) {
+        if (!dvs_camera_) dvs_camera_ = std::make_shared<DvsCamera>();
+        if (dvs_camera_->initialize(dvs_serial_)) {
             dvs_initialized_ = true;
             dvs_camera_created_ = true;
             std::string dvs_model;
             std::cout << "DVS camera initialized successfully" << std::endl;
-            if (dvs_camera_.getDeviceModelName(dvs_model)) {
+            if (dvs_camera_->getDeviceModelName(dvs_model)) {
                 dvs_model_ = dvs_model;
                 std::cout << "DVS Model: " << dvs_model_ << std::endl;
             }
@@ -107,10 +88,10 @@ bool Combo::start()
 {
     bool success = true;
 
-    if (dvs_initialized_ && dvs_camera_.isConnected()) {
+    if (dvs_initialized_ && dvs_camera_ && dvs_camera_->isConnected()) {
         auto recorder = getSyncedDataRecorder();
 
-        dvs_camera_.addTriggerInCallback([this](const dvsense::EventTriggerIn& trigger_event) {
+        dvs_camera_->addTriggerInCallback([this](const dvsense::EventTriggerIn& trigger_event) {
             TriggerSignal trigger(trigger_event);
             addTriggerSignal(trigger);
         });
@@ -122,7 +103,7 @@ bool Combo::start()
             }
         });
 
-        if (!dvs_camera_.start()) {
+        if (!dvs_camera_->start()) {
             LOG_WARN("DVS camera start failed");
             success = false;
         } else {
@@ -162,7 +143,7 @@ bool Combo::stop()
         }
     }
 
-    if (dvs_initialized_ && dvs_camera_.isConnected()) {
+    if (dvs_initialized_ && dvs_camera_ && dvs_camera_->isConnected()) {
         if (internal_event_callback_id_ != 0) {
             removeDvsEventCallback(internal_event_callback_id_);
             internal_event_callback_id_ = 0;
@@ -178,7 +159,7 @@ bool Combo::stop()
             stopDvsRawRecording();
         }
 
-        if (!dvs_camera_.stop()) {
+        if (!dvs_camera_->stop()) {
             LOG_WARN("DVS camera stop failed");
             success = false;
         } else {
@@ -205,8 +186,8 @@ bool Combo::destroy()
         rgb_initialized_ = false;
     }
 
-    if (dvs_initialized_ && dvs_camera_.isConnected()) {
-        dvs_camera_.destroy();
+    if (dvs_initialized_ && dvs_camera_ && dvs_camera_->isConnected()) {
+        dvs_camera_->destroy();
         dvs_initialized_ = false;
     }
 
@@ -349,34 +330,34 @@ bool Combo::startDvsRawRecording()
         return false;
     }
 
-    if (!dvs_initialized_ || !dvs_camera_.isConnected()) {
+    if (!dvs_initialized_ || !dvs_camera_ || !dvs_camera_->isConnected()) {
         LOG_ERROR("DVS camera not ready, cannot start raw recording");
         return false;
     }
 
-    if (dvs_camera_.isRecording()) {
+    if (dvs_camera_->isRecording()) {
         return true;
     }
 
-    if (!dvs_camera_.startRecording(recorder->dvsRawPath())) {
+    if (!dvs_camera_->startRecording(recorder->dvsRawPath())) {
         LOG_WARN("DVS raw recording failed to start at %s", recorder->dvsRawPath().c_str());
         return false;
     }
 
-    return dvs_camera_.isRecording();
+    return dvs_camera_->isRecording();
 }
 
 bool Combo::stopDvsRawRecording()
 {
-    if (!dvs_initialized_ || !dvs_camera_.isConnected()) {
+    if (!dvs_initialized_ || !dvs_camera_ || !dvs_camera_->isConnected()) {
         return false;
     }
 
-    if (!dvs_camera_.isRecording()) {
+    if (!dvs_camera_->isRecording()) {
         return true;
     }
 
-    if (!dvs_camera_.stopRecording()) {
+    if (!dvs_camera_->stopRecording()) {
         LOG_WARN("DVS raw recording stop reported failure");
         return false;
     }
@@ -385,12 +366,12 @@ bool Combo::stopDvsRawRecording()
 
 uint32_t Combo::addDvsEventCallback(dvsense::EventsStreamHandleCallback cb)
 {
-    if (!dvs_camera_.isConnected()) {
+    if (!dvs_camera_ || !dvs_camera_->isConnected()) {
         LOG_ERROR("DVS camera not connected, cannot add event callback");
         return 0;
     }
 
-    auto cam = dvs_camera_.getDvsCamera();
+    auto cam = dvs_camera_->getDvsCamera();
     if (cam) {
         return cam->addEventsStreamHandleCallback(std::move(cb));
     }
@@ -400,12 +381,12 @@ uint32_t Combo::addDvsEventCallback(dvsense::EventsStreamHandleCallback cb)
 
 bool Combo::removeDvsEventCallback(uint32_t callback_id)
 {
-    if (!dvs_camera_.isConnected()) {
+    if (!dvs_camera_ || !dvs_camera_->isConnected()) {
         LOG_ERROR("DVS camera not connected, cannot remove event callback");
         return false;
     }
 
-    auto cam = dvs_camera_.getDvsCamera();
+    auto cam = dvs_camera_->getDvsCamera();
     if (cam) {
         return cam->removeEventsStreamHandleCallback(callback_id);
     }
