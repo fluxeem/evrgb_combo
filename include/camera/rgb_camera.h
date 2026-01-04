@@ -144,7 +144,7 @@ public:
     CameraStatus loadFeatureFile(const std::string& file_path) override;
     CameraStatus saveFeatureFile(const std::string& file_path) override;
 
-    
+    CameraStatus getDeviceModelName (StringProperty& out) override;
 
     void* getNativeHandle() override;
 

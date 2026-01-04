@@ -177,6 +177,21 @@ public:
      */
     bool isRecording() const { return recording_.load(); }
 
+    /**
+     * #if ENGLISH
+     * @brief Get the device model name
+     * @param model_name Output string for model name
+     * @return true on success, false on error
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取设备型号名称
+     * @param model_name 输出的型号名称字符串
+     * @return 如果成功返回true，否则返回false
+     * #endif
+     */
+    bool getDeviceModelName(std::string& model_name);
+
 private:
     std::string serial_number_;
     std::shared_ptr<dvsense::DvsCamera> dvs_camera_;

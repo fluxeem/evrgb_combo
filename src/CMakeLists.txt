@@ -24,6 +24,7 @@ target_link_libraries(evrgb_combo
         DvsenseDriver::Driver 
     PRIVATE
         loguru::loguru
+        nlohmann_json::nlohmann_json
         ${MVS_LIBRARIES}
 )
 
