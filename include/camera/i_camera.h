@@ -120,7 +120,12 @@ public:
     virtual CameraStatus loadFeatureFile(const std::string& file_path) = 0;
     virtual CameraStatus saveFeatureFile(const std::string& file_path) = 0;
 
-    
+    // shortcut
+    virtual CameraStatus getDeviceModelName (StringProperty& out)
+    {
+        out = StringProperty{"unknown", 0};
+        return CameraStatus{-1, "Not implemented"};
+    }
 
     // Escape hatch
     virtual void* getNativeHandle() = 0;

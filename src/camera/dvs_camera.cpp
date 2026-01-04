@@ -325,4 +325,15 @@ void DvsCamera::setState(CameraState newState)
     }
 }
 
+bool DvsCamera::getDeviceModelName(std::string& model_name)
+{
+    if (!dvs_camera_) {
+        LOG_ERROR("DVS camera not initialized, cannot get model name");
+        return false;
+    }
+
+    model_name = dvs_camera_->getDescription().product;
+    return true;
+}
+
 }  // namespace evrgb

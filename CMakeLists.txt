@@ -26,6 +26,9 @@ option(BUILD_SAMPLES "Build sample programs" ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Ensure MSVC treats sources as UTF-8 to avoid code page warnings (e.g., C4819)
+add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
+
 # Set output directories for all targets
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -42,12 +45,14 @@ include(GNUInstallDirs)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(external/loguru)
+add_subdirectory(external/nlohmann_json)
 find_package(OpenCV REQUIRED)
 
 # Set include directories for the entire project
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     external/loguru
+    external/nlohmann_json/include
 )
 
 add_subdirectory(src)

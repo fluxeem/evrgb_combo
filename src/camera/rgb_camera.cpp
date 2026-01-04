@@ -528,7 +528,18 @@ CameraStatus HikvisionRgbCamera::saveFeatureFile(const std::string& file_path)
     return statusFrom("FeatureSave", ret);
 }
 
+CameraStatus HikvisionRgbCamera::getDeviceModelName (StringProperty& out)
+{
+    if (!camera_handle_) return nullHandleStatus("GetDeviceModelName");
 
+    MVCC_STRINGVALUE val{};
+    int ret = MV_CC_GetStringValue(camera_handle_, "DeviceModelName", &val);
+    if (ret == MV_OK) {
+        out.value = val.chCurValue;
+        out.max_len = val.nMaxLength;
+    }
+    return statusFrom("GetDeviceModelName", ret);
+}
 
 void* HikvisionRgbCamera::getNativeHandle()
 {
