@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <mutex>
+#include <optional>
 
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
@@ -22,6 +23,7 @@
 #endif
 
 #include "DvsenseDriver/FileReader/DvsFileReader.h"
+#include "utils/calib_info.h"
 
 namespace evrgb {
 
@@ -55,6 +57,30 @@ public:
                     const cv::Size2i& event_size,
                     const cv::Vec3b& on_color = {0, 0, 255},
                     const cv::Vec3b& off_color = {255, 0, 0});
+
+    /**
+     * #if ENGLISH
+     * @brief Apply calibration info for mapping event coordinates onto the RGB frame.
+     * @param calib Calibration variant (AffineTransform is used; others are ignored for now).
+     * #endif
+     *
+     * #if CHINESE
+     * @brief 设置用于将事件坐标映射到 RGB 图像的标定信息。
+     * @param calib 标定信息（当前使用 AffineTransform，其它类型暂不处理）。
+     * #endif
+     */
+    void setCalibration(const ComboCalibrationInfo& calib);
+
+    /**
+     * #if ENGLISH
+     * @brief Set intrinsics for RGB and DVS cameras to normalize coordinates when mapping.
+     * #endif
+     *
+     * #if CHINESE
+     * @brief 设置 RGB 与 DVS 的内参以便在映射前进行归一化。
+     * #endif
+     */
+    void setIntrinsics(const CameraIntrinsics& rgb, const CameraIntrinsics& dvs);
 
     /**
      * #if ENGLISH
@@ -298,6 +324,12 @@ private:
 
     float calcScaleFactor() const;
     cv::Point2i getEventOffset() const;
+    bool useAffineMapping() const;
+    cv::Point2i computeBaseOffset() const;
+    bool intrinsicsReady() const;
+    void refreshFusedTransform();
+    bool eventSizeValid() const;
+
 private:
     cv::Size2i rgb_size_;
     cv::Size2i event_size_;
@@ -307,6 +339,11 @@ private:
     cv::Point2i manual_offset_{0, 0};
     bool flip_x_{false};
     cv::Mat rgb_frame_;
+    ComboCalibrationInfo calibration_{};
+    std::optional<CameraIntrinsics> rgb_intrinsics_;
+    std::optional<CameraIntrinsics> dvs_intrinsics_;
+    cv::Matx23d fused_affine_{1.0, 0.0, 0.0,
+                              0.0, 1.0, 0.0};
     
     // 线程安全
     mutable std::mutex mutex_;

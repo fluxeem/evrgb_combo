@@ -41,7 +41,7 @@ struct EVRGB_API CameraIntrinsics {
     cv::Matx33d cameraMatrix() const;
 
     static CameraIntrinsics idealFromPhysical(double focal_length_mm,
-                                              double pixel_size_mm,
+                                              double pixel_size_um,
                                               int width,
                                               int height);
 };
@@ -62,22 +62,18 @@ struct EVRGB_API AffineTransform {
     cv::Matx23d matrix() const { return A; }
 };
 
-/** Full calibration description of the RGB+DVS combo. */
-struct EVRGB_API ComboCalibration {
-    std::string arrangement{"UNKNOWN"};
-    std::variant<std::monostate, RigidTransform, AffineTransform> extrinsics{};
-};
+using ComboCalibrationInfo = std::variant<std::monostate, RigidTransform, AffineTransform>;
 
 // JSON serialization helpers
 void to_json(nlohmann::json& j, const CameraIntrinsics& intrinsics);
 void from_json(const nlohmann::json& j, CameraIntrinsics& intrinsics);
 
-void to_json(nlohmann::json& j, const ComboCalibration& calib);
-void from_json(const nlohmann::json& j, ComboCalibration& calib);
+void to_json(nlohmann::json& j, const ComboCalibrationInfo& calib);
+void from_json(const nlohmann::json& j, ComboCalibrationInfo& calib);
 
 // File IO helpers
-EVRGB_API bool loadComboCalibration(const std::string& path, ComboCalibration& out, std::string* error_message = nullptr);
-EVRGB_API bool saveComboCalibration(const ComboCalibration& calib, const std::string& path, std::string* error_message = nullptr);
+EVRGB_API bool loadComboCalibration(const std::string& path, ComboCalibrationInfo& out, std::string* error_message = nullptr);
+EVRGB_API bool saveComboCalibration(const ComboCalibrationInfo& calib, const std::string& path, std::string* error_message = nullptr);
 
 }  // namespace evrgb
 

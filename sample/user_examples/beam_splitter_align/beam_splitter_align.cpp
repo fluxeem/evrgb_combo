@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include "utils/event_visualizer.h"
+#include "utils/calib_info.h"
 
 #ifdef _WIN32
     #include "opencv2/opencv.hpp"
@@ -25,6 +26,8 @@ namespace {
  */
 class SyncedFrameRenderer {
 public:
+    SyncedFrameRenderer() = default;
+
     void update(const evrgb::RgbImageWithTimestamp& rgb_data,
                 const std::vector<dvsense::Event2D>& events) {
         cv::Mat bgr = ensureBgrFrame(rgb_data.image);
@@ -32,14 +35,10 @@ public:
             return;
         }
 
-        event_size_ = inferEventFrameSize(events, event_size_);
         ensureVisualizer(bgr.size());
         if (!visualizer_) {
             return;
         }
-
-        visualizer_->setEventSize(event_size_);
-        visualizer_->setEventOffset(manual_offset_);
 
         if (!visualizer_->updateRgbFrame(bgr)) {
             return;
@@ -54,23 +53,43 @@ public:
         latest_frame_ = std::move(final_view);
     }
 
-    void toggleDisplayMode() {
-        if (!visualizer_) {
-            return;
+    void setIntrinsics(const evrgb::CameraIntrinsics& rgb, const evrgb::CameraIntrinsics& dvs) {
+        rgb_intrinsics_ = rgb;
+        dvs_intrinsics_ = dvs;
+        if (visualizer_) {
+            visualizer_->setIntrinsics(rgb, dvs);
         }
-        const auto mode = visualizer_->toggleDisplayMode();
-        std::cout << "Display Mode: "
-                  << (mode == evrgb::EventVisualizer::DisplayMode::SideBySide ? "Side-by-Side" : "Overlay Only")
-                  << std::endl;
     }
 
-    cv::Point adjustEventOffset(const cv::Point& delta) {
-        manual_offset_.x += delta.x;
-        manual_offset_.y += delta.y;
+    evrgb::AffineTransform setCalibration(const evrgb::AffineTransform& calib) {
+        calibration_ = calib;
         if (visualizer_) {
-            visualizer_->setEventOffset(manual_offset_);
+            visualizer_->setCalibration(calibration_);
         }
-        return manual_offset_;
+        return calibration_;
+    }
+
+    void setEventSize(const cv::Size& event_size) {
+        if (event_size.width <= 0 || event_size.height <= 0) {
+            return;
+        }
+
+        event_size_ = event_size;
+        if (visualizer_) {
+            visualizer_->setEventSize(event_size_);
+        }
+    }
+
+    evrgb::AffineTransform nudgeTranslation(const cv::Point& delta) {
+        calibration_.A(0, 2) += static_cast<double>(delta.x);
+        calibration_.A(1, 2) += static_cast<double>(delta.y);
+        return setCalibration(calibration_);
+    }
+
+    evrgb::AffineTransform scaleAffine(double factor) {
+        calibration_.A(0, 0) *= factor; calibration_.A(0, 1) *= factor;
+        calibration_.A(1, 0) *= factor; calibration_.A(1, 1) *= factor;
+        return setCalibration(calibration_);
     }
 
     bool getLatestFrame(cv::Mat& out_frame) {
@@ -117,33 +136,33 @@ private:
         return {};
     }
 
-    static cv::Size2i inferEventFrameSize(const std::vector<dvsense::Event2D>& events, cv::Size2i current) {
-        int max_x = current.width;
-        int max_y = current.height;
-        for (const auto& e : events) {
-            max_x = std::max(max_x, static_cast<int>(e.x) + 1);
-            max_y = std::max(max_y, static_cast<int>(e.y) + 1);
-        }
-        return {max_x, max_y};
-    }
-
-    void ensureVisualizer(const cv::Size& rgb_size) {
-        if (visualizer_) {
-            return;
-        }
-        if (rgb_size.width <= 0 || rgb_size.height <= 0) {
-            return;
-        }
-        visualizer_ = std::make_unique<evrgb::EventVisualizer>(rgb_size, event_size_);
-        visualizer_->setEventOffset(manual_offset_);
-    }
-
 private:
     cv::Mat latest_frame_;
     std::mutex mutex_;
     cv::Size2i event_size_{};
-    cv::Point2i manual_offset_{0, 0};
+    evrgb::AffineTransform calibration_{};
+    std::optional<evrgb::CameraIntrinsics> rgb_intrinsics_;
+    std::optional<evrgb::CameraIntrinsics> dvs_intrinsics_;
     std::unique_ptr<evrgb::EventVisualizer> visualizer_;
+
+    void ensureVisualizer(const cv::Size& rgb_size) {
+        if (rgb_size.width <= 0 || rgb_size.height <= 0) {
+            return;
+        }
+
+        if (event_size_.width <= 0 || event_size_.height <= 0) {
+            return;
+        }
+
+        if (!visualizer_) {
+            visualizer_ = std::make_unique<evrgb::EventVisualizer>(rgb_size, event_size_);
+            visualizer_->setFlipX(true);
+            visualizer_->setCalibration(calibration_);
+            if (rgb_intrinsics_.has_value() && dvs_intrinsics_.has_value()) {
+                visualizer_->setIntrinsics(*rgb_intrinsics_, *dvs_intrinsics_);
+            }
+        }
+    }
 };
 
 cv::Point getArrowDirection(int key) {
@@ -197,17 +216,38 @@ int main() {
     recorder_cfg.fps = 30.0;
     recorder_cfg.fourcc = "mp4v";
 
+    evrgb::CameraIntrinsics dvs_intrinsics = evrgb::CameraIntrinsics::idealFromPhysical(
+        16.0,    // focal length in mm
+        4.86, // pixel size in um
+        combo.getRawDvsCamera()->getWidth(),
+        combo.getRawDvsCamera()->getHeight()
+    );
+
+    evrgb::CameraIntrinsics rgb_intrinsics = evrgb::CameraIntrinsics::idealFromPhysical(
+        16.0,    // focal length in mm
+        4.80, // pixel size in um
+        combo.getRgbCamera()->getWidth(),
+        combo.getRgbCamera()->getHeight()
+    );
+
+    combo.getDvsCamera()->setIntrinsics(dvs_intrinsics);
+    combo.getRgbCamera()->setIntrinsics(rgb_intrinsics);
+
+    combo.calibration_info = evrgb::AffineTransform{};
+
     auto recorder = std::make_shared<evrgb::SyncedDataRecorder>();
     combo.setSyncedDataRecorder(recorder);
     std::cout << "Press SPACE to toggle recording (stored under: " << recorder_cfg.output_dir << ")" << std::endl;
 
     auto renderer = std::make_shared<SyncedFrameRenderer>();
+    renderer->setEventSize(cv::Size(combo.getRawDvsCamera()->getWidth(), combo.getRawDvsCamera()->getHeight()));
     const std::string window_name = "Combo Synced View";
     cv::namedWindow(window_name, cv::WINDOW_AUTOSIZE);
     std::cout << "Window created. Press 'q' or ESC to exit." << std::endl;
     std::cout << "Controls:" << std::endl;
-    std::cout << "  - Arrow Keys: Shift event overlay" << std::endl;
-    std::cout << "  - 'm': Toggle display mode (Overlay / Side-by-Side)" << std::endl;
+    std::cout << "  - Arrow Keys: Adjust affine translation" << std::endl;
+    std::cout << "  - '+': Scale up affine" << std::endl;
+    std::cout << "  - '-': Scale down affine" << std::endl;
     std::cout << "  - SPACE: Start/Stop recording" << std::endl;
 
     combo.setSyncedCallback(
@@ -226,7 +266,10 @@ int main() {
         return -1;
     }
 
-    std::cout << "Combo started. Adjust the overlay alignment with the arrow keys." << std::endl;
+    renderer->setIntrinsics(rgb_intrinsics, dvs_intrinsics);
+    renderer->setCalibration(std::get<evrgb::AffineTransform>(combo.calibration_info));
+
+    std::cout << "Combo started. Adjust the affine alignment with the arrow keys and +/- for scale." << std::endl;
 
     // Main thread: fetch rendered frame and display
     cv::Mat frame_to_show;
@@ -264,15 +307,26 @@ int main() {
             continue;
         }
 
-        if (key == 'm' || key == 'M') {
-            renderer->toggleDisplayMode();
+        const cv::Point delta = getArrowDirection(key);
+        if (delta.x != 0 || delta.y != 0) {
+            auto calib = renderer->nudgeTranslation(delta);
+            combo.calibration_info = calib;
+            std::cout << "Affine translation -> tx: " << calib.A(0, 2) << ", ty: " << calib.A(1, 2) << std::endl;
             continue;
         }
 
-        const cv::Point delta = getArrowDirection(key);
-        if (delta.x != 0 || delta.y != 0) {
-            const cv::Point updated = renderer->adjustEventOffset(delta);
-            std::cout << "Event offset -> x: " << updated.x << ", y: " << updated.y << std::endl;
+        if (key == '+' || key == '=') {
+            auto calib = renderer->scaleAffine(1.02);
+            combo.calibration_info = calib;
+            std::cout << "Affine scaled up (2%)" << std::endl;
+            continue;
+        }
+
+        if (key == '-' || key == '_') {
+            auto calib = renderer->scaleAffine(0.98);
+            combo.calibration_info = calib;
+            std::cout << "Affine scaled down (2%)" << std::endl;
+            continue;
         }
     }
 

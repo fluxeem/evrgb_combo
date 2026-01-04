@@ -110,13 +110,13 @@ cv::Matx44d RigidTransform::matrix() const
 }
 
 CameraIntrinsics CameraIntrinsics::idealFromPhysical(double focal_length_mm,
-                                                     double pixel_size_mm,
+                                                     double pixel_size_um,
                                                      int width,
                                                      int height)
 {
     CameraIntrinsics intr;
-    intr.fx = focal_length_mm / pixel_size_mm;
-    intr.fy = focal_length_mm / pixel_size_mm;
+    intr.fx = focal_length_mm / (pixel_size_um * 1e-3);
+    intr.fy = focal_length_mm / (pixel_size_um * 1e-3);
     intr.cx = (static_cast<double>(width) - 1.0) * 0.5;
     intr.cy = (static_cast<double>(height) - 1.0) * 0.5;
     intr.skew = 0.0;
@@ -186,12 +186,23 @@ void to_json(nlohmann::json& j, const AffineTransform& a)
 
 void from_json(const nlohmann::json& j, AffineTransform& a)
 {
+    // Support legacy formats: either direct 2x3 array or object with "matrix".
+    if (j.is_array()) {
+        a.A = jsonToMat23(j);
+        return;
+    }
+
+    if (j.contains("matrix")) {
+        a.A = jsonToMat23(j.at("matrix"));
+        return;
+    }
+
     a.A = jsonToMat23(j);
 }
 
-void to_json(nlohmann::json& j, const ComboCalibration& calib)
+void to_json(nlohmann::json& j, const ComboCalibrationInfo& calib)
 {
-    j = {{"arrangement", calib.arrangement}};
+    j = nlohmann::json::object();
     std::visit([
         &j](auto&& value) {
             using T = std::decay_t<decltype(value)>;
@@ -201,21 +212,20 @@ void to_json(nlohmann::json& j, const ComboCalibration& calib)
                 j["beam_splitter_affine"] = value;
             }
         },
-        calib.extrinsics);
+        calib);
 }
 
-void from_json(const nlohmann::json& j, ComboCalibration& calib)
+void from_json(const nlohmann::json& j, ComboCalibrationInfo& calib)
 {
-    calib.arrangement = j.value("arrangement", std::string{"UNKNOWN"});
-    calib.extrinsics = std::monostate{};
+    calib = std::monostate{};
     if (j.contains("stereo_extrinsics")) {
-        calib.extrinsics = j.at("stereo_extrinsics").get<RigidTransform>();
+        calib = j.at("stereo_extrinsics").get<RigidTransform>();
     } else if (j.contains("beam_splitter_affine")) {
-        calib.extrinsics = j.at("beam_splitter_affine").get<AffineTransform>();
+        calib = j.at("beam_splitter_affine").get<AffineTransform>();
     }
 }
 
-bool loadComboCalibration(const std::string& path, ComboCalibration& out, std::string* error_message)
+bool loadComboCalibration(const std::string& path, ComboCalibrationInfo& out, std::string* error_message)
 {
     std::ifstream in(path);
     if (!in.is_open()) {
@@ -226,7 +236,7 @@ bool loadComboCalibration(const std::string& path, ComboCalibration& out, std::s
     try {
         nlohmann::json j;
         in >> j;
-        out = j.get<ComboCalibration>();
+        out = j.get<ComboCalibrationInfo>();
         return true;
     } catch (const std::exception& ex) {
         setError(ex.what(), error_message);
@@ -234,7 +244,7 @@ bool loadComboCalibration(const std::string& path, ComboCalibration& out, std::s
     }
 }
 
-bool saveComboCalibration(const ComboCalibration& calib, const std::string& path, std::string* error_message)
+bool saveComboCalibration(const ComboCalibrationInfo& calib, const std::string& path, std::string* error_message)
 {
     std::ofstream out(path, std::ios::out | std::ios::trunc);
     if (!out.is_open()) {

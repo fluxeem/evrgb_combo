@@ -1,6 +1,7 @@
 #include "utils/event_visualizer.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "DvsenseDriver/FileReader/DvsFileReader.h"
 
@@ -32,6 +33,7 @@ EventVisualizer::DisplayMode EventVisualizer::displayMode() const {
 
 void EventVisualizer::setEventSize(const cv::Size2i& size) {
     event_size_ = size;
+    refreshFusedTransform();
 }
 
 cv::Size2i EventVisualizer::eventSize() const {
@@ -60,6 +62,7 @@ cv::Vec3b EventVisualizer::offColor() const { return off_color_; }
 
 void EventVisualizer::setFlipX(bool flip) {
     flip_x_ = flip;
+    refreshFusedTransform();
 }
 
 bool EventVisualizer::flipX() const {
@@ -77,6 +80,19 @@ bool EventVisualizer::updateRgbFrame(const cv::Mat& rgb_frame) {
 
     rgb_frame_ = rgb_frame.clone();
     return true;
+}
+
+void EventVisualizer::setCalibration(const ComboCalibrationInfo& calib)
+{
+    calibration_ = calib;
+    refreshFusedTransform();
+}
+
+void EventVisualizer::setIntrinsics(const CameraIntrinsics& rgb, const CameraIntrinsics& dvs)
+{
+    rgb_intrinsics_ = rgb;
+    dvs_intrinsics_ = dvs;
+    refreshFusedTransform();
 }
 
 bool EventVisualizer::visualizeEvents(
@@ -129,6 +145,29 @@ bool EventVisualizer::overlayEvents(
         return true;
     }
 
+    const bool use_affine = (display_mode_ == DisplayMode::Overlay) && useAffineMapping();
+    const cv::Point2i base_offset = computeBaseOffset();
+
+    if (use_affine) {
+        for (auto it = begin; it != end; ++it) {
+            const auto& e = *it;
+            const double tx = fused_affine_(0, 0) * static_cast<double>(e.x)
+                             + fused_affine_(0, 1) * static_cast<double>(e.y)
+                             + fused_affine_(0, 2) + manual_offset_.x;
+            const double ty = fused_affine_(1, 0) * static_cast<double>(e.x)
+                             + fused_affine_(1, 1) * static_cast<double>(e.y)
+                             + fused_affine_(1, 2) + manual_offset_.y;
+
+            const int x = static_cast<int>(std::lround(tx));
+            const int y = static_cast<int>(std::lround(ty));
+            if (x < 0 || y < 0 || x >= output_frame.cols || y >= output_frame.rows) {
+                continue;
+            }
+            output_frame.at<cv::Vec3b>(y, x) = e.polarity ? on_color_ : off_color_;
+        }
+        return true;
+    }
+
     const cv::Point2i offset = getEventOffset();
     const float scale = calcScaleFactor();
 
@@ -171,6 +210,83 @@ cv::Point2i EventVisualizer::getEventOffset() const {
         : offset_x;
 
     return {base_x + manual_offset_.x, offset_y + manual_offset_.y};
+}
+
+bool EventVisualizer::useAffineMapping() const
+{
+    return std::holds_alternative<AffineTransform>(calibration_);
+}
+
+cv::Point2i EventVisualizer::computeBaseOffset() const
+{
+    if (display_mode_ == DisplayMode::SideBySide) {
+        return {rgb_size_.width, 0};
+    }
+    return {0, 0};
+}
+
+bool EventVisualizer::intrinsicsReady() const
+{
+    return rgb_intrinsics_.has_value() && dvs_intrinsics_.has_value();
+}
+
+bool EventVisualizer::eventSizeValid() const
+{
+    return event_size_.width > 0 && event_size_.height > 0;
+}
+
+void EventVisualizer::refreshFusedTransform()
+{
+    fused_affine_ = cv::Matx23d(1.0, 0.0, 0.0,
+                                0.0, 1.0, 0.0);
+
+    if (!intrinsicsReady() || !useAffineMapping() || !eventSizeValid()) {
+        return;
+    }
+
+    const auto affine = std::get<AffineTransform>(calibration_);
+
+    // Build K_rgb * (A * K_dvs^{-1}) including optional horizontal flip.
+    const auto& rgb_intr = *rgb_intrinsics_;
+    const auto& dvs_intr = *dvs_intrinsics_;
+
+    const double flip_sign = flip_x_ ? -1.0 : 1.0;
+    const double flip_bias = flip_x_ ? static_cast<double>(event_size_.width - 1) : 0.0;
+
+    const cv::Matx33d K_rgb = rgb_intr.cameraMatrix();
+
+    const cv::Matx33d K_dvs_inv(
+        flip_sign / dvs_intr.fx, 0.0, (flip_bias - dvs_intr.cx) / dvs_intr.fx,
+        0.0, 1.0 / dvs_intr.fy, -dvs_intr.cy / dvs_intr.fy,
+        0.0, 0.0, 1.0);
+
+    const cv::Matx33d A = cv::Matx33d(
+        affine.A(0, 0), affine.A(0, 1), affine.A(0, 2),
+        affine.A(1, 0), affine.A(1, 1), affine.A(1, 2),
+        0.0,            0.0,            1.0);
+
+    const cv::Matx33d M = A * (K_rgb * K_dvs_inv);
+
+    fused_affine_(0, 0) = M(0, 0);
+    fused_affine_(0, 1) = M(0, 1);
+    fused_affine_(0, 2) = M(0, 2);
+
+    fused_affine_(1, 0) = M(1, 0);
+    fused_affine_(1, 1) = M(1, 1);
+    fused_affine_(1, 2) = M(1, 2);
+
+    const auto base_offset = computeBaseOffset();
+    fused_affine_(0, 2) += base_offset.x;
+    fused_affine_(1, 2) += base_offset.y;
+
+    const bool finite = std::isfinite(fused_affine_(0, 0)) && std::isfinite(fused_affine_(0, 1)) &&
+                        std::isfinite(fused_affine_(0, 2)) && std::isfinite(fused_affine_(1, 0)) &&
+                        std::isfinite(fused_affine_(1, 1)) && std::isfinite(fused_affine_(1, 2));
+    if (!finite) {
+        fused_affine_ = cv::Matx23d(1.0, 0.0, 0.0,
+                                    0.0, 1.0, 0.0);
+    }
+
 }
 
 }  // namespace evrgb

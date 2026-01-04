@@ -21,6 +21,7 @@
 #include "camera/rgb_camera.h"
 #include "sync/event_vector_pool.h"
 #include "recording/synced_data_recorder.h"
+#include "utils/calib_info.h"
 
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
@@ -199,6 +200,8 @@ public:
      * #endif
      */
     Arrangement getArrangement() const { return arrangement_; }
+
+    ComboCalibrationInfo calibration_info{};  ///< Calibration information between RGB and DVS cameras
 
 private:
     std::string rgb_serial_;
