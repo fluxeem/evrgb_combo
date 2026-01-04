@@ -15,6 +15,7 @@
 #endif
 
 #include "camera/i_camera.h"
+#include "utils/calib_info.h"
 
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
@@ -100,6 +101,32 @@ public:
     unsigned int getWidth() const override;
     unsigned int getHeight() const override;
 
+    /**
+     * #if ENGLISH
+     * @brief Set camera intrinsics calibration
+     * @param intrinsics Camera intrinsics parameters
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 设置相机内参标定
+     * @param intrinsics 相机内参参数
+     * #endif
+     */
+    void setIntrinsics(const CameraIntrinsics& intrinsics) override;
+    
+    /**
+     * #if ENGLISH
+     * @brief Get camera intrinsics calibration
+     * @return Optional camera intrinsics parameters
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取相机内参标定
+     * @return 可选的相机内参参数
+     * #endif
+     */
+    std::optional<CameraIntrinsics> getIntrinsics() const override;
+
     // Property access (typed)
     CameraStatus getInt(const std::string& key, IntProperty& out) override;
     CameraStatus setInt(const std::string& key, int64_t value) override;
@@ -149,6 +176,8 @@ private:
     
     unsigned int width_ = 0;
     unsigned int height_ = 0;
+
+    std::optional<CameraIntrinsics> intrinsics_;
 
     /**
      * @brief Find whether a camera with given serial exists

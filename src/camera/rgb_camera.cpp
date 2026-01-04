@@ -388,6 +388,16 @@ CameraStatus HikvisionRgbCamera::getInt(const std::string& key, IntProperty& out
     return statusFrom("GetIntValueEx", ret);
 }
 
+void HikvisionRgbCamera::setIntrinsics(const CameraIntrinsics& intrinsics)
+{
+    intrinsics_ = intrinsics;
+}
+
+std::optional<CameraIntrinsics> HikvisionRgbCamera::getIntrinsics() const
+{
+    return intrinsics_;
+}
+
 CameraStatus HikvisionRgbCamera::setInt(const std::string& key, int64_t value)
 {
     if (!camera_handle_) return nullHandleStatus("SetIntValue");

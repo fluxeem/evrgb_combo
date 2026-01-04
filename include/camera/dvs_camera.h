@@ -11,9 +11,12 @@
 #include <functional>
 #include <atomic>
 #include <mutex>
+#include <optional>
 #include "DvsenseDriver/camera/DvsCameraManager.hpp"
 #include "DvsenseDriver/camera/DvsCamera.hpp"
 #include "DvsenseBase/EventBase/EventTypes.hpp"
+
+#include "utils/calib_info.h"
 
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
@@ -192,6 +195,32 @@ public:
      */
     bool getDeviceModelName(std::string& model_name);
 
+    /**
+     * #if ENGLISH
+     * @brief Set camera intrinsics calibration
+     * @param intrinsics Camera intrinsics parameters
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 设置相机内参标定
+     * @param intrinsics 相机内参参数
+     * #endif
+     */
+    void setIntrinsics(const CameraIntrinsics& intrinsics);
+    
+    /**
+     * #if ENGLISH
+     * @brief Get camera intrinsics calibration
+     * @return Optional camera intrinsics parameters
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取相机内参标定
+     * @return 可选的相机内参参数
+     * #endif
+     */
+    std::optional<CameraIntrinsics> getIntrinsics() const;
+
 private:
     std::string serial_number_;
     std::shared_ptr<dvsense::DvsCamera> dvs_camera_;
@@ -202,6 +231,8 @@ private:
     std::shared_ptr<dvsense::CameraTool> trigger_in_tool_;
     std::vector<uint32_t> trigger_in_callback_ids_;
     bool trigger_in_processing_enabled_ = false;
+
+    std::optional<CameraIntrinsics> intrinsics_;
     
     /**
      * @brief Update internal camera state (debug-logged)

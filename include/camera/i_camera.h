@@ -8,6 +8,8 @@
 #include <vector>
 #include <opencv2/opencv.hpp>
 
+#include "utils/calib_info.h"
+
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
         #define EVRGB_API __declspec(dllexport)
@@ -136,6 +138,10 @@ public:
     virtual bool getLatestImage(cv::Mat& image) = 0;
     virtual unsigned int getWidth() const = 0;
     virtual unsigned int getHeight() const = 0;
+
+    // Intrinsic parameters (optional)
+    virtual void setIntrinsics(const CameraIntrinsics& intrinsics) = 0;
+    virtual std::optional<CameraIntrinsics> getIntrinsics() const = 0;
 };
 
 /// RGB camera information structure (device-level metadata)
