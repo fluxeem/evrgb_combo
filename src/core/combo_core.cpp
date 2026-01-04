@@ -24,29 +24,27 @@ Combo::Combo(std::string rgb_serial, std::string dvs_serial, Arrangement arrange
     , event_vector_pool_(std::max(max_buffer_size, Combo::kDefaultEventPoolPreallocation), Combo::kDefaultEventPoolCapacity)
 {
     LOG_INFO("Creating Combo (rgb_serial='%s', dvs_serial='%s', max_buffer_size='%zu')", rgb_serial_.c_str(), dvs_serial_.c_str(), max_buffer_size);
+    init();
 
-    rgb_camera_ = std::make_shared<HikvisionRgbCamera>();
+    // rgb_camera_ = std::make_shared<HikvisionRgbCamera>();
 
-    if (rgb_camera_->initialize(rgb_serial_)) {
-        rgb_initialized_ = true;
-    } else {
-        LOG_WARN("RGB camera initialization failed (serial='%s')", rgb_serial_.c_str());
-    }
+    // if (rgb_camera_->initialize(rgb_serial_)) {
+    //     rgb_initialized_ = true;
+    // } else {
+    //     LOG_WARN("RGB camera initialization failed (serial='%s')", rgb_serial_.c_str());
+    // }
 
-    if (!dvs_serial_.empty()) {
-        if (dvs_camera_.initialize(dvs_serial_)) {
-            dvs_initialized_ = true;
-            dvs_camera_created_ = true;
-        } else {
-            LOG_WARN("DVS camera initialization failed (serial='%s')", dvs_serial_.c_str());
-        }
-    } else {
-        LOG_WARN("DVS camera initialization failed (no serial provided)");
-    }
+    // if (!dvs_serial_.empty()) {
+    //     if (dvs_camera_.initialize(dvs_serial_)) {
+    //         dvs_initialized_ = true;
+    //         dvs_camera_created_ = true;
+    //     } else {
+    //         LOG_WARN("DVS camera initialization failed (serial='%s')", dvs_serial_.c_str());
+    //     }
+    // } else {
+    //     LOG_WARN("DVS camera initialization failed (no serial provided)");
+    // }
 
-    if (dvs_camera_created_ && dvs_camera_.isConnected()) {
-        LOG_INFO("DVS camera height: %d", dvs_camera_.getDvsCamera()->getHeight());
-    }
 }
 
 Combo::~Combo()
@@ -74,8 +72,11 @@ bool Combo::init()
         if (rgb_camera_->initialize(rgb_serial_)) {
             rgb_initialized_ = true;
             StringProperty model_prop;
-            if (rgb_camera_->getDeviceModelName(model_prop).success()) {
+            CameraStatus status = rgb_camera_->getDeviceModelName(model_prop);
+            if (status.success()) {
                 rgb_model_ = model_prop.value;
+            } else {
+                LOG_WARN("Failed to get RGB camera model name, error code: %d", status.code);
             }
         } else {
             LOG_WARN("RGB camera initialization failed (serial='%s')", rgb_serial_.c_str());
@@ -88,8 +89,10 @@ bool Combo::init()
             dvs_initialized_ = true;
             dvs_camera_created_ = true;
             std::string dvs_model;
+            std::cout << "DVS camera initialized successfully" << std::endl;
             if (dvs_camera_.getDeviceModelName(dvs_model)) {
                 dvs_model_ = dvs_model;
+                std::cout << "DVS Model: " << dvs_model_ << std::endl;
             }
         } else {
             LOG_WARN("DVS camera initialization failed (serial='%s')", dvs_serial_.c_str());
