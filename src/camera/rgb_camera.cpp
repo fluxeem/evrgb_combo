@@ -6,12 +6,84 @@
 #include "utils/evrgb_logger.h"
 #include "MvCameraControl.h"
 #include <cstring>
+#include <memory>
 #include <sstream>
 
 namespace evrgb
 {
 
 namespace {
+
+// Register Hikvision factories on translation unit load so factory-based creation works without central registration.
+std::vector<RgbCameraInfo> enumerateHikvisionCameras()
+{
+    std::vector<RgbCameraInfo> cameraList;
+    MV_CC_DEVICE_INFO_LIST deviceList;
+    memset(&deviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
+
+    int nRet = MV_CC_EnumDevices(MV_GIGE_DEVICE | MV_USB_DEVICE, &deviceList);
+    if (MV_OK != nRet) {
+        LOG_ERROR("Enumerate devices failed! Error code: 0x%08X", nRet);
+        return cameraList;
+    }
+
+    if (deviceList.nDeviceNum == 0) {
+        LOG_INFO("No camera devices found");
+        return cameraList;
+    }
+
+    for (unsigned int i = 0; i < deviceList.nDeviceNum; i++) {
+        MV_CC_DEVICE_INFO* deviceInfo = deviceList.pDeviceInfo[i];
+        if (!deviceInfo) continue;
+
+        RgbCameraInfo cameraInfo;
+
+        if (deviceInfo->nTLayerType == MV_GIGE_DEVICE) {
+            MV_GIGE_DEVICE_INFO* gigeInfo = &deviceInfo->SpecialInfo.stGigEInfo;
+            strncpy(cameraInfo.manufacturer, (char*)gigeInfo->chManufacturerName, sizeof(cameraInfo.manufacturer) - 1);
+            strncpy(cameraInfo.serial_number, (char*)gigeInfo->chSerialNumber, sizeof(cameraInfo.serial_number) - 1);
+        } else if (deviceInfo->nTLayerType == MV_USB_DEVICE) {
+            MV_USB3_DEVICE_INFO* usbInfo = &deviceInfo->SpecialInfo.stUsb3VInfo;
+            strncpy(cameraInfo.manufacturer, (char*)usbInfo->chManufacturerName, sizeof(cameraInfo.manufacturer) - 1);
+            strncpy(cameraInfo.serial_number, (char*)usbInfo->chSerialNumber, sizeof(cameraInfo.serial_number) - 1);
+        }
+
+        void* cameraHandle = nullptr;
+        nRet = MV_CC_CreateHandle(&cameraHandle, deviceInfo);
+        if (MV_OK == nRet) {
+            nRet = MV_CC_OpenDevice(cameraHandle);
+            if (MV_OK == nRet) {
+                MVCC_INTVALUE widthValue = {0};
+                nRet = MV_CC_GetIntValue(cameraHandle, "Width", &widthValue);
+                if (MV_OK == nRet) cameraInfo.width = widthValue.nCurValue;
+
+                MVCC_INTVALUE heightValue = {0};
+                nRet = MV_CC_GetIntValue(cameraHandle, "Height", &heightValue);
+                if (MV_OK == nRet) cameraInfo.height = heightValue.nCurValue;
+
+                MV_CC_CloseDevice(cameraHandle);
+            }
+            MV_CC_DestroyHandle(cameraHandle);
+        }
+
+        cameraList.push_back(cameraInfo);
+        LOG_DEBUG("Camera %zu: %s (%s)", cameraList.size(), cameraInfo.manufacturer, cameraInfo.serial_number);
+    }
+
+    LOG_INFO("Found %zu camera(s)", cameraList.size());
+    return cameraList;
+}
+
+static bool registerHikvisionVendors()
+{
+    registerRgbCameraFactory("hikvision", [] { return std::make_shared<HikvisionRgbCamera>(); });
+    registerRgbCameraFactory("hikrobot", [] { return std::make_shared<HikvisionRgbCamera>(); });
+    registerRgbCameraFactory("hik", [] { return std::make_shared<HikvisionRgbCamera>(); });
+    registerRgbEnumerator(enumerateHikvisionCameras);
+    return true;
+}
+
+static const bool kHikVendorsRegistered = registerHikvisionVendors();
 
 CameraStatus statusFrom(const char* action, uint32_t code)
 {
@@ -54,75 +126,6 @@ HikvisionRgbCamera::~HikvisionRgbCamera()
 {
     LOG_DEBUG("HikvisionRgbCamera destructor");
     destroy();
-}
-
-std::vector<RgbCameraInfo> enumerateAllRgbCameras()
-{
-    std::vector<RgbCameraInfo> cameraList;
-    
-    MV_CC_DEVICE_INFO_LIST deviceList;
-    memset(&deviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
-    
-    int nRet = MV_CC_EnumDevices(MV_GIGE_DEVICE | MV_USB_DEVICE, &deviceList);
-    if (MV_OK != nRet)
-    {
-        LOG_ERROR("Enumerate devices failed! Error code: 0x%08X", nRet);
-        return cameraList;
-    }
-    
-    if (deviceList.nDeviceNum == 0)
-    {
-        LOG_INFO("No camera devices found");
-        return cameraList;
-    }
-    
-    for (unsigned int i = 0; i < deviceList.nDeviceNum; i++)
-    {
-        MV_CC_DEVICE_INFO* deviceInfo = deviceList.pDeviceInfo[i];
-        if (deviceInfo == nullptr)
-            continue;
-            
-        RgbCameraInfo cameraInfo;
-        
-        if (deviceInfo->nTLayerType == MV_GIGE_DEVICE)
-        {
-            MV_GIGE_DEVICE_INFO* gigeInfo = &deviceInfo->SpecialInfo.stGigEInfo;
-            strncpy(cameraInfo.manufacturer, (char*)gigeInfo->chManufacturerName, sizeof(cameraInfo.manufacturer) - 1);
-            strncpy(cameraInfo.serial_number, (char*)gigeInfo->chSerialNumber, sizeof(cameraInfo.serial_number) - 1);
-        }
-        else if (deviceInfo->nTLayerType == MV_USB_DEVICE)
-        {
-            MV_USB3_DEVICE_INFO* usbInfo = &deviceInfo->SpecialInfo.stUsb3VInfo;
-            strncpy(cameraInfo.manufacturer, (char*)usbInfo->chManufacturerName, sizeof(cameraInfo.manufacturer) - 1);
-            strncpy(cameraInfo.serial_number, (char*)usbInfo->chSerialNumber, sizeof(cameraInfo.serial_number) - 1);
-        }
-        
-        void* cameraHandle = nullptr;
-        nRet = MV_CC_CreateHandle(&cameraHandle, deviceInfo);
-        if (MV_OK == nRet)
-        {
-            nRet = MV_CC_OpenDevice(cameraHandle);
-            if (MV_OK == nRet)
-            {
-                MVCC_INTVALUE widthValue = {0};
-                nRet = MV_CC_GetIntValue(cameraHandle, "Width", &widthValue);
-                if (MV_OK == nRet) cameraInfo.width = widthValue.nCurValue;
-                
-                MVCC_INTVALUE heightValue = {0};
-                nRet = MV_CC_GetIntValue(cameraHandle, "Height", &heightValue);
-                if (MV_OK == nRet) cameraInfo.height = heightValue.nCurValue;
-                
-                MV_CC_CloseDevice(cameraHandle);
-            }
-            MV_CC_DestroyHandle(cameraHandle);
-        }
-        
-        cameraList.push_back(cameraInfo);
-        LOG_DEBUG("Camera %zu: %s (%s)", cameraList.size(), cameraInfo.manufacturer, cameraInfo.serial_number);
-    }
-    
-    LOG_INFO("Found %zu camera(s)", cameraList.size());
-    return cameraList;
 }
 
 bool HikvisionRgbCamera::initialize(const std::string& serial_number)

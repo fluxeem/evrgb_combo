@@ -5,9 +5,9 @@
 #ifndef EVRGB_RGB_CAMERA_H_
 #define EVRGB_RGB_CAMERA_H_
 
-#include <vector>
-#include <string>
 #include <optional>
+#include <string>
+#include <vector>
 #ifdef _WIN32
     #include "opencv2/opencv.hpp"
 #else
@@ -28,28 +28,6 @@
 
 namespace evrgb
 {
-
-/// @brief RGB camera information structure
-struct EVRGB_API RgbCameraInfo
-{
-    /// Manufacturer name (null-terminated)
-    char manufacturer[64] = {};
-
-    /// Camera serial number (null-terminated)
-    char serial_number[64] = {};
-
-    /// Image width in pixels
-    unsigned int width = 0;
-
-    /// Image height in pixels
-    unsigned int height = 0;
-};
-
-/**
- * @brief Enumerate all available RGB cameras
- * @return A vector of RgbCameraInfo describing each discovered camera
- */
-EVRGB_API std::vector<RgbCameraInfo> enumerateAllRgbCameras();
 
 /**
  * @brief Hikvision RGB camera implementation
