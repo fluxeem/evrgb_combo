@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <variant>
 
 #include <nlohmann/json.hpp>
 
@@ -195,7 +196,9 @@ cv::Point getArrowDirection(int key) {
 // ============================
 // ============ main ==========
 // ============================
-int main() {
+int main(int argc, char** argv) {
+    const std::string metadata_path = (argc > 1) ? argv[1] : "combo_metadata.json";
+
     // Enumerate cameras
     auto [rgb_cameras, dvs_cameras] = evrgb::enumerateAllCameras();
 
@@ -218,24 +221,40 @@ int main() {
     recorder_cfg.fps = 30.0;
     recorder_cfg.fourcc = "mp4v";
 
-    evrgb::CameraIntrinsics dvs_intrinsics = evrgb::CameraIntrinsics::idealFromPhysical(
-        16.0,    // focal length in mm
-        4.86, // pixel size in um
-        combo.getRawDvsCamera()->getWidth(),
-        combo.getRawDvsCamera()->getHeight()
-    );
+    bool loaded_from_file = combo.loadMetadata(metadata_path, nullptr);
+    if (loaded_from_file) {
+        std::cout << "Loaded combo metadata from: " << metadata_path << std::endl;
+    } else {
+        std::cout << "Metadata not loaded, using defaults (path attempted: " << metadata_path << ")" << std::endl;
+    }
 
-    evrgb::CameraIntrinsics rgb_intrinsics = evrgb::CameraIntrinsics::idealFromPhysical(
-        16.0,    // focal length in mm
-        4.80, // pixel size in um
-        combo.getRgbCamera()->getWidth(),
-        combo.getRgbCamera()->getHeight()
-    );
+    // Fetch current metadata (after load attempt) to configure renderer and defaults.
+    evrgb::ComboMetadata current_meta = combo.getMetadata();
 
-    combo.getDvsCamera()->setIntrinsics(dvs_intrinsics);
-    combo.getRgbCamera()->setIntrinsics(rgb_intrinsics);
+    evrgb::CameraIntrinsics dvs_intrinsics{};
+    evrgb::CameraIntrinsics rgb_intrinsics{};
+    if (current_meta.rgb.intrinsics && current_meta.dvs.intrinsics) {
+        rgb_intrinsics = *current_meta.rgb.intrinsics;
+        dvs_intrinsics = *current_meta.dvs.intrinsics;
+    } else {
+        std::cerr << "Intrinsics not found in metadata, using ideal pinhole model based on physical parameters." << std::endl;
+        dvs_intrinsics = evrgb::CameraIntrinsics::idealFromPhysical(
+            16.0,    // focal length in mm
+            4.86, // pixel size in um
+            combo.getRawDvsCamera()->getWidth(),
+            combo.getRawDvsCamera()->getHeight()
+        );
 
-    combo.calibration_info = evrgb::AffineTransform{};
+        rgb_intrinsics = evrgb::CameraIntrinsics::idealFromPhysical(
+            16.0,    // focal length in mm
+            4.80, // pixel size in um
+            combo.getRgbCamera()->getWidth(),
+            combo.getRgbCamera()->getHeight()
+        );
+
+        combo.getDvsCamera()->setIntrinsics(dvs_intrinsics);
+        combo.getRgbCamera()->setIntrinsics(rgb_intrinsics);
+    }
 
     auto recorder = std::make_shared<evrgb::SyncedDataRecorder>();
     combo.setSyncedDataRecorder(recorder);
@@ -275,7 +294,13 @@ int main() {
     }
 
     renderer->setIntrinsics(rgb_intrinsics, dvs_intrinsics);
-    renderer->setCalibration(std::get<evrgb::AffineTransform>(combo.calibration_info));
+
+    evrgb::AffineTransform affine_calib{};
+    if (std::holds_alternative<evrgb::AffineTransform>(combo.calibration_info)) {
+        affine_calib = std::get<evrgb::AffineTransform>(combo.calibration_info);
+    }
+    renderer->setCalibration(affine_calib);
+    combo.calibration_info = affine_calib;
 
     std::cout << "Combo started. Adjust the affine alignment with the arrow keys and +/- for scale." << std::endl;
 
@@ -343,6 +368,15 @@ int main() {
 
     if (recorder && recorder->isActive()) {
         combo.stopRecording();
+    }
+
+    {
+        std::string err;
+        if (!combo.saveMetadata(metadata_path, &err)) {
+            std::cerr << "Failed to save combo metadata to '" << metadata_path << "': " << err << std::endl;
+        } else {
+            std::cout << "Saved combo metadata to: " << metadata_path << std::endl;
+        }
     }
 
     std::cout << "Exit." << std::endl;
