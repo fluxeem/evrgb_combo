@@ -121,6 +121,7 @@ INPUT                  = include \
                          documentation/en/camera_usage_tutorial.md \
                          documentation/en/parameter_tuning_tutorial.md \
                          documentation/en/recording_tutorial.md \
+                         documentation/en/calibration_tutorial.md \
                          documentation/en/samples.md \
                          
 INPUT_ENCODING         = UTF-8
