@@ -12,6 +12,43 @@
 
 ## Combo 基本操作
 
+### 组合排列模式
+
+EvRGB Combo SDK 支持两种 RGB+DVS 组合排列模式，分别适用于不同的应用场景：
+
+#### 1. STEREO 模式（立体模式）
+- **定义**：RGB 相机和 DVS 相机并排独立放置，通过外部触发信号进行时间同步
+- **特点**：
+  - 相机之间物理分离，视野独立
+  - 需要外部触发线连接以实现精确同步
+  - 适用于需要分别观察两个不同视角的场景
+  - 需要通过标定确定两个相机之间的空间关系
+- **使用场景**：
+  - 双目视觉系统
+  - 需要独立控制 RGB 和 DVS 视野的应用
+  - 大视野覆盖场景
+  - 需要灵活配置相机位置的实验环境
+
+#### 2. BEAM_SPLITTER 模式（分束镜模式）
+- **定义**：RGB 相机和 DVS 相机通过分束镜（光束分离器）共享同一光路，实现完美的空间对齐
+- **特点**：
+  - RGB 和 DVS 共享相同的视野和光路
+  - 自动实现空间对齐，无需复杂的标定
+  - 通过分束镜将光线分到两个相机
+  - 保证像素级的空间对应关系
+- **使用场景**：
+  - 需要像素级空间对齐的深度学习应用
+  - 事件相机与传统相机融合研究
+  - 需要精确对齐 RGB 图像和事件数据的应用
+  - 计算机视觉算法开发和测试
+
+#### 如何选择排列模式
+选择排列模式时，考虑以下因素：
+- **空间对齐需求**：需要完美对齐选择 BEAM_SPLITTER，灵活视角选择 STEREO
+- **硬件配置**：BEAM_SPLITTER 需要分束镜硬件，STEREO 只需要两个相机和触发线
+- **应用场景**：深度学习和算法研究推荐 BEAM_SPLITTER，实际应用推荐 STEREO
+- **标定复杂度**：BEAM_SPLITTER 标定简单，STEREO 需要完整的立体标定
+
 ### 基本组合操作
 
 ```cpp
@@ -34,9 +71,19 @@ int main() {
     // 创建 Combo 对象
     std::string rgb_serial = rgb_cameras[0].serial_number;
     std::string dvs_serial = dvs_cameras[0].serial;
-    
-    evrgb::Combo combo(rgb_serial, dvs_serial);
-    
+
+    // 指定排列模式（默认为 STEREO）
+    // evrgb::ComboArrangement::STEREO - 立体模式（相机并排）
+    // evrgb::ComboArrangement::BEAM_SPLITTER - 分束镜模式（共享光路）
+    evrgb::Combo combo(rgb_serial, dvs_serial, evrgb::ComboArrangement::STEREO);
+
+    // 或者使用分束镜模式
+    // evrgb::Combo combo(rgb_serial, dvs_serial, evrgb::ComboArrangement::BEAM_SPLITTER);
+
+    // 获取当前排列模式
+    evrgb::ComboArrangement arrangement = combo.getArrangement();
+    std::cout << "排列模式: " << evrgb::toString(arrangement) << std::endl;
+
     std::cout << "使用 RGB: " << rgb_serial << std::endl;
     std::cout << "使用 DVS: " << dvs_serial << std::endl;
 
@@ -100,7 +147,12 @@ int main() {
     auto [rgb_cameras, dvs_cameras] = evrgb::enumerateAllCameras();
     if (rgb_cameras.empty() || dvs_cameras.empty()) return -1;
 
+    // 创建 Combo 对象（默认使用 STEREO 模式）
     evrgb::Combo combo(rgb_cameras[0].serial_number, dvs_cameras[0].serial);
+
+    // 如果需要使用分束镜模式，可以指定：
+    // evrgb::Combo combo(rgb_cameras[0].serial_number, dvs_cameras[0].serial,
+    //                     evrgb::ComboArrangement::BEAM_SPLITTER);
 
     // 设置 RGB 图像回调
     combo.setRgbImageCallback([](const evrgb::RgbImageWithTimestamp& rgb) {
@@ -154,7 +206,10 @@ int main() {
         return 1;
     }
 
-    // 创建 Combo 对象
+    // 创建 Combo 对象（默认使用 STEREO 模式）
+    // 如果需要使用分束镜模式，可以指定：
+    // evrgb::Combo combo(rgb_cameras[0].serial_number, dvs_cameras[0].serial,
+    //                     evrgb::ComboArrangement::BEAM_SPLITTER);
     evrgb::Combo combo(rgb_cameras[0].serial_number, dvs_cameras[0].serial);
 
     // 初始化并检查状态
@@ -185,6 +240,43 @@ int main() {
 ```
 
 ## 常见问题
+
+### Q: 如何选择合适的排列模式？
+
+**STEREO 模式适用场景**：
+- 需要灵活配置相机位置
+- 需要观察两个不同的视角
+- 实际应用环境，视野范围较大
+- 已有立体标定经验
+
+**BEAM_SPLITTER 模式适用场景**：
+- 需要像素级空间对齐
+- 深度学习模型训练和推理
+- 算法开发和测试
+- 需要精确对应 RGB 图像和事件数据
+
+### Q: 排列模式是否可以在运行时更改？
+
+**答案**：不可以。排列模式在创建 Combo 对象时指定，初始化后无法更改。如果需要更改排列模式，必须：
+1. 销毁当前的 Combo 对象
+2. 创建新的 Combo 对象并指定不同的排列模式
+3. 重新初始化和启动
+
+### Q: BEAM_SPLITTER 模式需要特殊的硬件吗？
+
+**答案**：是的。BEAM_SPLITTER 模式需要：
+- 分束镜（光束分离器）硬件
+- 精确的光学对齐支架
+- 两个相机的光轴需要对齐到分束镜
+- 通常需要专业的光学调试
+
+### Q: STEREO 模式的标定复杂吗？
+
+**答案**：相对复杂。STEREO 模式需要进行完整的立体标定：
+- 需要标定每个相机的内参
+- 需要标定两个相机之间的外参（旋转和平移）
+- 需要使用标定板进行多次采集
+- SDK 提供了标定信息存储和加载功能（`calibration_info`）
 
 ### Q: Combo 初始化失败
 
@@ -252,6 +344,9 @@ int main() {
 2. 了解数据录制功能，保存同步数据
 3. 探索高级同步特性，如慢动作回放
 4. 查看更多示例代码，了解实际应用场景
+5. 根据你的应用场景选择合适的排列模式（STEREO 或 BEAM_SPLITTER）
+6. 学习如何进行相机标定，特别是 STEREO 模式下的立体标定
+7. 探索标定信息的保存和加载功能（`saveMetadata` 和 `loadMetadata`）
 
 ## 相关文档
 

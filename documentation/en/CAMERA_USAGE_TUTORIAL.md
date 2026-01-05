@@ -12,6 +12,43 @@ This tutorial introduces how to use EvRGB Combo SDK to operate RGB+DVS combo cam
 
 ## Combo Basic Operations
 
+### Combo Arrangement Modes
+
+EvRGB Combo SDK supports two RGB+DVS arrangement modes, each suitable for different application scenarios:
+
+#### 1. STEREO Mode
+- **Definition**: RGB camera and DVS camera are placed side-by-side independently, synchronized through external trigger signals
+- **Features**:
+  - Cameras are physically separated with independent fields of view
+  - Requires external trigger line connection for precise synchronization
+  - Suitable for scenarios requiring observation of two different perspectives
+  - Requires calibration to determine spatial relationship between cameras
+- **Use Cases**:
+  - Stereo vision systems
+  - Applications requiring independent control of RGB and DVS fields of view
+  - Large field-of-view coverage scenarios
+  - Experimental environments requiring flexible camera positioning
+
+#### 2. BEAM_SPLITTER Mode
+- **Definition**: RGB camera and DVS camera share the same optical path through a beam splitter, achieving perfect spatial alignment
+- **Features**:
+  - RGB and DVS share the same field of view and optical path
+  - Automatic spatial alignment without complex calibration
+  - Light is split to both cameras through a beam splitter
+  - Ensures pixel-level spatial correspondence
+- **Use Cases**:
+  - Deep learning applications requiring pixel-level spatial alignment
+  - Event camera and traditional camera fusion research
+  - Applications requiring precise alignment of RGB images and event data
+  - Computer vision algorithm development and testing
+
+#### How to Choose Arrangement Mode
+Consider the following factors when choosing arrangement mode:
+- **Spatial Alignment Requirements**: BEAM_SPLITTER for perfect alignment, STEREO for flexible perspectives
+- **Hardware Configuration**: BEAM_SPLITTER requires beam splitter hardware, STEREO only needs two cameras and trigger cable
+- **Application Scenarios**: BEAM_SPLITTER recommended for deep learning and algorithm research, STEREO for practical applications
+- **Calibration Complexity**: BEAM_SPLITTER has simple calibration, STEREO requires complete stereo calibration
+
 ### Basic Combo Operations
 
 ```cpp
@@ -34,9 +71,19 @@ int main() {
     // Create Combo object
     std::string rgb_serial = rgb_cameras[0].serial_number;
     std::string dvs_serial = dvs_cameras[0].serial;
-    
-    evrgb::Combo combo(rgb_serial, dvs_serial);
-    
+
+    // Specify arrangement mode (default is STEREO)
+    // evrgb::ComboArrangement::STEREO - Stereo mode (cameras side-by-side)
+    // evrgb::ComboArrangement::BEAM_SPLITTER - Beam splitter mode (shared optical path)
+    evrgb::Combo combo(rgb_serial, dvs_serial, evrgb::ComboArrangement::STEREO);
+
+    // Or use beam splitter mode
+    // evrgb::Combo combo(rgb_serial, dvs_serial, evrgb::ComboArrangement::BEAM_SPLITTER);
+
+    // Get current arrangement mode
+    evrgb::ComboArrangement arrangement = combo.getArrangement();
+    std::cout << "Arrangement mode: " << evrgb::toString(arrangement) << std::endl;
+
     std::cout << "Using RGB: " << rgb_serial << std::endl;
     std::cout << "Using DVS: " << dvs_serial << std::endl;
 
@@ -100,7 +147,12 @@ int main() {
     auto [rgb_cameras, dvs_cameras] = evrgb::enumerateAllCameras();
     if (rgb_cameras.empty() || dvs_cameras.empty()) return -1;
 
+    // Create Combo object (default uses STEREO mode)
     evrgb::Combo combo(rgb_cameras[0].serial_number, dvs_cameras[0].serial);
+
+    // If you need to use beam splitter mode, specify:
+    // evrgb::Combo combo(rgb_cameras[0].serial_number, dvs_cameras[0].serial,
+    //                     evrgb::ComboArrangement::BEAM_SPLITTER);
 
     // Set RGB image callback
     combo.setRgbImageCallback([](const evrgb::RgbImageWithTimestamp& rgb) {
@@ -154,7 +206,10 @@ int main() {
         return 1;
     }
 
-    // Create Combo object
+    // Create Combo object (default uses STEREO mode)
+    // If you need to use beam splitter mode, specify:
+    // evrgb::Combo combo(rgb_cameras[0].serial_number, dvs_cameras[0].serial,
+    //                     evrgb::ComboArrangement::BEAM_SPLITTER);
     evrgb::Combo combo(rgb_cameras[0].serial_number, dvs_cameras[0].serial);
 
     // Initialize and check status
@@ -185,6 +240,43 @@ int main() {
 ```
 
 ## Common Issues
+
+### Q: How to choose the appropriate arrangement mode?
+
+**STEREO Mode Use Cases**:
+- Need flexible camera positioning
+- Need to observe two different perspectives
+- Real-world application environments with large field of view
+- Have experience with stereo calibration
+
+**BEAM_SPLITTER Mode Use Cases**:
+- Need pixel-level spatial alignment
+- Deep learning model training and inference
+- Algorithm development and testing
+- Need precise correspondence between RGB images and event data
+
+### Q: Can arrangement mode be changed at runtime?
+
+**Answer**: No. Arrangement mode is specified when creating the Combo object and cannot be changed after initialization. If you need to change the arrangement mode, you must:
+1. Destroy the current Combo object
+2. Create a new Combo object with a different arrangement mode
+3. Re-initialize and start
+
+### Q: Does BEAM_SPLITTER mode require special hardware?
+
+**Answer**: Yes. BEAM_SPLITTER mode requires:
+- Beam splitter hardware
+- Precise optical alignment mount
+- Optical axes of both cameras aligned to the beam splitter
+- Usually requires professional optical debugging
+
+### Q: Is STEREO mode calibration complex?
+
+**Answer**: Relatively complex. STEREO mode requires complete stereo calibration:
+- Need to calibrate intrinsic parameters of each camera
+- Need to calibrate extrinsic parameters (rotation and translation) between two cameras
+- Need to use calibration board for multiple captures
+- SDK provides calibration information storage and loading functionality (`calibration_info`)
 
 ### Q: Combo initialization failed
 
@@ -252,6 +344,9 @@ After mastering basic Combo operations, you can:
 2. Understand data recording functionality to save synchronized data
 3. Explore advanced synchronization features like slow-motion replay
 4. Check more example code to understand real-world applications
+5. Choose the appropriate arrangement mode (STEREO or BEAM_SPLITTER) based on your application scenario
+6. Learn how to perform camera calibration, especially stereo calibration in STEREO mode
+7. Explore calibration information saving and loading functionality (`saveMetadata` and `loadMetadata`)
 
 ## Related Documentation
 
