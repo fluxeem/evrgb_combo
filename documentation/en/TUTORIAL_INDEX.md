@@ -23,6 +23,7 @@ These tutorials cover advanced features and professional applications.
 | Tutorial | Description |
 |----------|-------------|
 | @subpage calibration_tutorial | Camera calibration and coordinate system alignment |
+| @subpage visualization_tutorial | Event visualization and display modes |
 
 ## 📋 Tutorial Features
 

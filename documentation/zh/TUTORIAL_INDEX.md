@@ -23,6 +23,7 @@
 | 教程 | 描述 |
 |------|------|
 | @subpage calibration_tutorial | 相机校准与坐标系对齐 |
+| @subpage visualization_tutorial | 事件可视化与显示模式 |
 
 ## 📋 教程特性
 
