@@ -44,6 +44,19 @@
 - 控制：`+`/`=` 增加曝光；`-`/`_` 减少曝光；`q` 或 ESC 退出。
 - 说明：关闭自动曝光，设置 ExposureMode=Timed，然后应用请求的曝光（按相机范围裁剪）；默认使用首个 RGB 相机。
 
+### beam_splitter_align
+- 作用：分束镜对齐工具；实时同步预览，支持交互式调整仿射变换（平移/缩放）来对齐 DVS 和 RGB 图像。
+- 依赖：Hikrobot MVS SDK、OpenCV、Dvsense 驱动、显示环境。
+- 运行：
+  - Linux/macOS: `cd build && ./bin/beam_splitter_align [metadata_path]`
+  - Windows: `cd build && .\bin\Release\beam_splitter_align.exe [metadata_path]`
+- 控制：方向键 调整仿射平移；`+`/`=` 放大仿射；`-`/`_` 缩小仿射；空格 开/关录制；`q` 或 ESC 退出。
+- 说明：
+  - 默认使用 BEAM_SPLITTER 排列方式，同步延迟 100ms。
+  - 支持加载/保存元数据（包括内参和校准信息），默认路径为 `combo_metadata.json`。
+  - 录制输出在 `recordings/`，含 mp4 视频和事件文件。
+  - 适用于分束镜光学系统的精确对齐和校准。
+
 ## 提示
 - 运行流式示例前，至少连接一台 RGB 与一台 DVS，相机默认取首个检测到的设备。
 - 若使用自定义构建目录，请对应调整可执行文件路径（示例：`cmake --build <dir> --config Release --target <sample_target>`）。

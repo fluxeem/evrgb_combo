@@ -44,6 +44,19 @@ This page summarizes the samples under sample/user_examples and how to run them.
 - Controls: '+'/'=' increases exposure; '-'/'_' decreases exposure; q or ESC to quit.
 - Notes: disables auto exposure, sets ExposureMode=Timed, then applies the requested exposure (clamped to camera limits). Uses the first detected RGB camera.
 
+### beam_splitter_align
+- Purpose: beam splitter alignment tool; provides live synchronized preview with interactive affine transformation adjustment (translation/scale) to align DVS and RGB images.
+- Dependencies: Hikrobot MVS SDK, OpenCV, Dvsense driver, display server.
+- Run:
+  - Linux/macOS: cd build && ./bin/beam_splitter_align [metadata_path]
+  - Windows: cd build && .\bin\Release\beam_splitter_align.exe [metadata_path]
+- Controls: arrow keys adjust affine translation; '+'/'=' scale up affine; '-'/'_' scale down affine; SPACE toggle recording; q or ESC to quit.
+- Notes:
+  - Uses BEAM_SPLITTER arrangement by default with 100ms sync delay.
+  - Supports loading/saving metadata (including intrinsics and calibration info), default path is `combo_metadata.json`.
+  - Recordings are written under `recordings/` with mp4 video and event files.
+  - Designed for precise alignment and calibration of beam splitter optical systems.
+
 ## Tips
 - Keep at least one RGB and one DVS camera connected before running streaming samples; they pick the first detected device of each type.
 - If you use a custom build directory, adjust the binary paths accordingly (cmake --build <dir> --config Release --target <sample_target>).
