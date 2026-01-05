@@ -4,7 +4,7 @@
 # Project related configuration options
 #---------------------------------------------------------------------------
 PROJECT_NAME           = "EvRGB Combo SDK"
-PROJECT_NUMBER         = "1.0.1"
+PROJECT_NUMBER         = "1.1.0"
 PROJECT_BRIEF          = "SDK for Event and RGB Camera Combination"
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = docs/zh
