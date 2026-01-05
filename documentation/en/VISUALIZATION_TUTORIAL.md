@@ -1,4 +1,4 @@
-# Event Visualization Tutorial
+@page visualization_tutorial Event Visualization Tutorial
 
 ## Overview
 

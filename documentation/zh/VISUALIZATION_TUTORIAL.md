@@ -1,4 +1,4 @@
-# 事件可视化教程
+@page visualization_tutorial 事件可视化教程
 
 ## 概述
 
