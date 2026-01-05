@@ -177,6 +177,119 @@ int main() {
 }
 ```
 
+## Metadata 保存和加载
+
+### Metadata 概述
+
+EvRGB Combo SDK 提供了 metadata（元数据）管理功能，用于保存和加载相机配置、标定信息等关键数据。主要应用场景包括：
+
+- **标定信息持久化**：保存相机标定结果，避免重复标定
+- **配置管理**：记录 RGB 和 DVS 相机的参数设置
+- **数据录制关联**：在录制数据时保存对应的 metadata，确保数据可追溯
+
+### Metadata 数据结构
+
+#### ComboMetadata（组合元数据）
+
+```cpp
+struct ComboMetadata {
+    CameraMetadata rgb;                    // RGB 相机元数据
+    CameraMetadata dvs;                    // DVS 相机元数据
+    ComboArrangement arrangement;          // 排列模式（STEREO 或 BEAM_SPLITTER）
+    ComboCalibrationInfo calibration;      // 标定信息
+};
+```
+
+#### CameraMetadata（单相机元数据）
+
+```cpp
+struct CameraMetadata {
+    std::string manufacturer;              // 制造商
+    std::string model;                     // 相机型号
+    std::string serial;                    // 序列号
+    unsigned int width = 0;                // 图像宽度
+    unsigned int height = 0;               // 图像高度
+    std::optional<CameraIntrinsics> intrinsics;  // 相机内参（可选）
+};
+```
+
+### Metadata 操作方法
+
+#### 获取 Metadata
+
+```cpp
+// 获取当前 Combo 的所有元数据
+evrgb::ComboMetadata metadata = combo.getMetadata();
+
+// 转换为 JSON（需要包含 nlohmann/json.hpp）
+nlohmann::json j = metadata;
+std::cout << j.dump(2) << std::endl;
+```
+
+#### 保存 Metadata
+
+```cpp
+// 保存 metadata 到 JSON 文件
+std::string metadata_path = "combo_metadata.json";
+std::string error_message;
+
+if (combo.saveMetadata(metadata_path, &error_message)) {
+    std::cout << "Metadata 保存成功: " << metadata_path << std::endl;
+} else {
+    std::cerr << "Metadata 保存失败: " << error_message << std::endl;
+}
+```
+
+#### 加载 Metadata
+
+```cpp
+// 从 JSON 文件加载 metadata 并应用到 Combo
+std::string metadata_path = "combo_metadata.json";
+std::string error_message;
+
+if (combo.loadMetadata(metadata_path, &error_message)) {
+    std::cout << "Metadata 加载成功" << std::endl;
+    
+    // 获取加载后的 metadata
+    evrgb::ComboMetadata metadata = combo.getMetadata();
+} else {
+    std::cerr << "Metadata 加载失败: " << error_message << std::endl;
+}
+```
+
+#### 应用 Metadata
+
+```cpp
+// 手动应用自定义 metadata
+evrgb::ComboMetadata metadata;
+// ... 设置 metadata 内容
+
+if (combo.applyMetadata(metadata, true)) {
+    std::cout << "Metadata 应用成功" << std::endl;
+}
+```
+
+### 使用场景示例
+
+**标定信息持久化**：
+
+```cpp
+// 标定完成后保存
+combo.calibration_info = affine_transform;
+combo.saveMetadata("calibration.json", nullptr);
+
+// 启动时加载
+combo.loadMetadata("calibration.json", nullptr);
+```
+
+**数据录制关联**：
+
+```cpp
+// 保存 metadata 到录制目录
+std::string metadata_path = recording_dir + "/metadata.json";
+combo.saveMetadata(metadata_path, nullptr);
+```
+
 ## 错误处理
 
 ### 检查 Combo 状态

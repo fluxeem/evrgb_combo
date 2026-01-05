@@ -177,6 +177,119 @@ int main() {
 }
 ```
 
+## Metadata Saving and Loading
+
+### Metadata Overview
+
+EvRGB Combo SDK provides metadata management functionality for saving and loading camera configurations, calibration information, and other critical data. Main use cases include:
+
+- **Calibration persistence**: Save calibration results to avoid repeated calibration
+- **Configuration management**: Record parameter settings for RGB and DVS cameras
+- **Data recording association**: Save corresponding metadata when recording data to ensure data traceability
+
+### Metadata Data Structures
+
+#### ComboMetadata (Combo Metadata)
+
+```cpp
+struct ComboMetadata {
+    CameraMetadata rgb;                    // RGB camera metadata
+    CameraMetadata dvs;                    // DVS camera metadata
+    ComboArrangement arrangement;          // Arrangement mode (STEREO or BEAM_SPLITTER)
+    ComboCalibrationInfo calibration;      // Calibration information
+};
+```
+
+#### CameraMetadata (Single Camera Metadata)
+
+```cpp
+struct CameraMetadata {
+    std::string manufacturer;              // Manufacturer
+    std::string model;                     // Camera model
+    std::string serial;                    // Serial number
+    unsigned int width = 0;                // Image width
+    unsigned int height = 0;               // Image height
+    std::optional<CameraIntrinsics> intrinsics;  // Camera intrinsics (optional)
+};
+```
+
+### Metadata Operations
+
+#### Getting Metadata
+
+```cpp
+// Get all metadata for the current Combo
+evrgb::ComboMetadata metadata = combo.getMetadata();
+
+// Convert to JSON (requires nlohmann/json.hpp)
+nlohmann::json j = metadata;
+std::cout << j.dump(2) << std::endl;
+```
+
+#### Saving Metadata
+
+```cpp
+// Save metadata to a JSON file
+std::string metadata_path = "combo_metadata.json";
+std::string error_message;
+
+if (combo.saveMetadata(metadata_path, &error_message)) {
+    std::cout << "Metadata saved successfully: " << metadata_path << std::endl;
+} else {
+    std::cerr << "Failed to save metadata: " << error_message << std::endl;
+}
+```
+
+#### Loading Metadata
+
+```cpp
+// Load metadata from a JSON file and apply it to the Combo
+std::string metadata_path = "combo_metadata.json";
+std::string error_message;
+
+if (combo.loadMetadata(metadata_path, &error_message)) {
+    std::cout << "Metadata loaded successfully" << std::endl;
+    
+    // Get loaded metadata
+    evrgb::ComboMetadata metadata = combo.getMetadata();
+} else {
+    std::cerr << "Failed to load metadata: " << error_message << std::endl;
+}
+```
+
+#### Applying Metadata
+
+```cpp
+// Manually apply custom metadata
+evrgb::ComboMetadata metadata;
+// ... Set metadata content
+
+if (combo.applyMetadata(metadata, true)) {
+    std::cout << "Metadata applied successfully" << std::endl;
+}
+```
+
+### Usage Examples
+
+**Calibration persistence**:
+
+```cpp
+// Save after calibration
+combo.calibration_info = affine_transform;
+combo.saveMetadata("calibration.json", nullptr);
+
+// Load on startup
+combo.loadMetadata("calibration.json", nullptr);
+```
+
+**Data recording association**:
+
+```cpp
+// Save metadata to recording directory
+std::string metadata_path = recording_dir + "/metadata.json";
+combo.saveMetadata(metadata_path, nullptr);
+```
+
 ## Error Handling
 
 ### Checking Combo Status
