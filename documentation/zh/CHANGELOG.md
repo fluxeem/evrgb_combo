@@ -8,17 +8,31 @@
 ## [未发布]
 
 ### 新增
-- 初始变更日志设置
+- EventVisualizer 类，支持实时事件可视化（叠加/并排模式）
+- 分光镜对齐示例，包含交互式标定工具
+- 相机内参支持，包含 CameraIntrinsics 结构和工厂模式
+- 标定信息系统（CalibInfo、RigidTransform、AffineTransform）
+- 元数据持久化系统（CameraMetadata、ComboMetadata），支持 JSON 序列化
+- 录制元数据支持，集成到 SyncedDataRecorder 和 RecordedSyncReader
+- RGB 和 DVS 相机的设备型号基础设施
+- 相机排列模式（STEREO、BEAM_SPLITTER）及特定标定支持
+- nlohmann_json 依赖，作为 Git 子模块
+- 全面的文档：事件可视化教程、标定教程、更新的教程文档
 
 ### 变更
-
-### 已弃用
-
-### 移除
+- 相机管理重构，使用共享指针和工厂模式
+- Combo 接口增强，整合元数据处理
+- 录制系统改进，支持元数据
+- 文档重组和教程重新组织
+- 构建系统更新，支持新的依赖和源文件
 
 ### 修复
+- JSON 序列化链接问题
+- 接口兼容性问题
+- 文档不一致性
 
-### 安全
+### 移除
+- 未使用的 combo_threads.h 头文件
 
 ## [1.1.0] - 2026-01-05
 
