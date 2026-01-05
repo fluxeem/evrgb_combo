@@ -6,17 +6,24 @@
 
 ### 🔰 入门教程
 
+这些教程涵盖基础知识和基本操作，帮助你快速上手 EvRGB Combo SDK。
+
 | 教程 | 描述 |
 |------|------|
+| @subpage installation | SDK 安装与环境配置 |
 | @subpage enumeration_tutorial | 发现并识别已连接的相机设备 |
 | @subpage camera_usage_tutorial | RGB 与 DVS 相机的基础操作 |
+| @subpage parameter_tuning_tutorial | 优化相机参数以获得最佳效果 |
+| @subpage recording_tutorial | 同步数据录制与回放功能 |
 
 ### ⚙️ 进阶教程
 
+这些教程涵盖高级功能和专业应用场景。
+
 | 教程 | 描述 |
 |------|------|
-| @subpage parameter_tuning_tutorial | 优化相机参数以获得最佳效果 |
-| @subpage recording_tutorial | 同步数据录制与回放功能 |
+| @subpage calibration_tutorial | 相机校准与坐标系对齐 |
+| @subpage visualization_tutorial | 事件可视化与显示模式 |
 
 ## 📋 教程特性
 

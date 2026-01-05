@@ -5,7 +5,7 @@ REM This script will automatically generate documentation, backup old versions, 
 setlocal enabledelayedexpansion
 
 REM Set project root directory
-set "PROJECT_ROOT=%~dp0.."
+set "PROJECT_ROOT=%~dp0../.."
 
 REM Set OSS paths
 set "OSS_BASE=oss://fluxeem-hk/evrgb_combo"

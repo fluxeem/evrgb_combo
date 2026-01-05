@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include "utils/evrgb_logger.h"
+#include <nlohmann/json.hpp>
 
 namespace evrgb {
 
@@ -24,6 +25,8 @@ bool RecordedSyncReader::open()
     if (!openEvents()) {
         return false;
     }
+
+    loadMetadata();
 
     cursor_ = 0;
     opened_ = true;
@@ -202,6 +205,44 @@ bool RecordedSyncReader::openEvents()
     dvs_reader_->seekTime(start_ts);
 
     return true;
+}
+
+bool RecordedSyncReader::loadMetadata()
+{
+    const std::filesystem::path metadata_path = resolve(paths_.metadata);
+
+    std::ifstream metadata_file(metadata_path);
+    if (!metadata_file.is_open()) {
+        std::string msg = "RecordedSyncReader: Failed to open metadata file at " + metadata_path.string();
+        LOG_WARN(msg.c_str());
+        return false;
+    }
+
+    try {
+        nlohmann::json j;
+        metadata_file >> j;
+
+        // Check if metadata is wrapped in a "combo_metadata" field
+        if (j.contains("combo_metadata")) {
+            metadata_ = j["combo_metadata"].get<ComboMetadata>();
+        } else {
+            metadata_ = j.get<ComboMetadata>();
+        }
+
+        std::string msg = "RecordedSyncReader: Successfully loaded metadata from " + metadata_path.string();
+        LOG_INFO(msg.c_str());
+        return true;
+    } catch (const std::exception& e) {
+        std::string msg = "RecordedSyncReader: Failed to parse metadata file: " + std::string(e.what());
+        LOG_ERROR(msg.c_str());
+        metadata_ = std::nullopt;
+        return false;
+    }
+}
+
+std::optional<ComboMetadata> RecordedSyncReader::getMetadata() const
+{
+    return metadata_;
 }
 
 }  // namespace evrgb

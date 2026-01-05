@@ -2,6 +2,7 @@
 #define EVRGB_SYNCED_DATA_RECORDER_H_
 
 #include <fstream>
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -30,6 +31,7 @@ struct SyncedRecorderConfig {
     std::string output_dir;   // Directory to store MP4/CSV/DVS raw
     double fps = 30.0;
     std::string fourcc = "mp4v";
+    ComboMetadata combo_metadata{};  // Snapshot of combo/device metadata to persist
 };
 
 class EVRGB_API SyncedDataRecorder {
@@ -56,9 +58,12 @@ private:
     std::string rgb_path_;
     std::string csv_path_;
     std::string dvs_raw_path_;
+    std::string metadata_path_;
     cv::VideoWriter writer_;
     std::ofstream csv_stream_;
     cv::Size frame_size_{0, 0};
+    std::size_t frame_count_ = 0;
+    std::size_t event_count_ = 0;
     bool started_ = false;
     mutable std::mutex mutex_;
 };

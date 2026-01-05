@@ -1,5 +1,8 @@
 #include "recording/recorded_sync_reader.h"
 
+#include "utils/event_visualizer.h"
+#include "utils/calib_info.h"
+
 #include <iostream>
 #include <algorithm>
 
@@ -10,112 +13,6 @@
 #endif
 
 namespace {
-
-class DisplayCanvas {
-public: 
-    enum DISPLAY_MODE {
-        OVERLAY, 
-        SIDE_BY_SIDE
-    } display_mode = OVERLAY;    
-
-    DisplayCanvas(const cv::Size2i& rgb_size, const cv::Size2i& event_size)
-        : rgb_size_(rgb_size), event_size_(event_size){
-
-        }
-
-    DISPLAY_MODE toggleDisplayMode() {
-        if (display_mode == OVERLAY) {
-            display_mode = SIDE_BY_SIDE;
-        } else {
-            display_mode = OVERLAY;
-        }
-        return display_mode;
-    }
-
-    bool updateFrame(const cv::Mat& rgb_frame) {
-        if (rgb_frame.size() != rgb_size_) {
-            return false;
-        }
-        rgb_frame_ = rgb_frame.clone();
-        return true;
-    }
-
-    bool visualizeEvents(
-        dvsense::Event2DVector::const_iterator remaining_begin,
-        dvsense::Event2DVector::const_iterator remaining_end,
-        dvsense::Event2DVector::const_iterator new_begin,
-        dvsense::Event2DVector::const_iterator new_end,
-        cv::Mat& output_frame
-    ) {
-        if (rgb_frame_.empty()) {
-            return false;
-        }
-
-        // init output frame
-        if (display_mode == OVERLAY) {
-            output_frame = rgb_frame_.clone();
-        } else {
-            output_frame.create(rgb_size_.height, rgb_size_.width * 2, rgb_frame_.type());
-            output_frame.setTo(cv::Scalar::all(0));
-            rgb_frame_.copyTo(output_frame(cv::Rect(0, 0, rgb_size_.width, rgb_size_.height)));
-        }
-        
-        overlayEvents(remaining_begin, remaining_end, output_frame);
-        overlayEvents(new_begin, new_end, output_frame);
-        return true;
-    }
-
-
-private:
-
-    bool overlayEvents(
-        dvsense::Event2DVector::const_iterator begin,
-        dvsense::Event2DVector::const_iterator end,
-        cv::Mat& output_frame
-    ) {
-        if (rgb_frame_.empty()) {
-            return false;
-        }
-
-        cv::Point2i offset = getEventOffset();
-        float scale = calcScaleFactor();
-
-        for (auto it = begin; it != end; ++it) {
-            const auto& e = *it;
-            int x = static_cast<int>(e.x * scale) + offset.x;
-            int y = static_cast<int>(e.y * scale) + offset.y;
-            if (x < 0 || y < 0 || x >= output_frame.cols || y >= output_frame.rows) {
-                continue;
-            }
-            output_frame.at<cv::Vec3b>(y, x) = e.polarity ? on_color : off_color;
-        }
-        return true;
-    }
-
-    float calcScaleFactor() const {
-        float scale_x = static_cast<float>(rgb_size_.width) / static_cast<float>(event_size_.width);
-        float scale_y = static_cast<float>(rgb_size_.height) / static_cast<float>(event_size_.height);
-        return std::min(scale_x, scale_y);
-    }
-
-    cv::Point2i getEventOffset() const {
-        float scale = calcScaleFactor();
-        int offset_x = (rgb_size_.width - static_cast<int>(event_size_.width * scale)) / 2;
-        int offset_y = (rgb_size_.height - static_cast<int>(event_size_.height * scale)) / 2;
-        if (display_mode == SIDE_BY_SIDE) {
-            offset_x += rgb_size_.width;
-        }
-        return cv::Point2i(offset_x, offset_y);
-    }
-
-    const cv::Vec3b on_color{0, 0, 255};
-    const cv::Vec3b off_color{255, 0, 0};
-
-    cv::Size2i rgb_size_;
-    cv::Size2i event_size_;
-
-    cv::Mat rgb_frame_;
-};
 
 struct ReplayStatus {
     bool slowmo_active = false;
@@ -132,7 +29,7 @@ int main(int argc, char* argv[])
     const std::string recording_dir = (argc > 1) ? argv[1] : "recordings";
 
     std::cout << "Usage: " << argv[0] << " [recording_dir]\n"
-              << "Controls: q/Esc to quit, m to toggle display mode, space to toggle slow-mo."
+              << "Controls: q/Esc to quit, m to toggle display mode, f to flip X, space to toggle slow-mo."
               << std::endl;
 
     evrgb::RecordedSyncReader reader({recording_dir});
@@ -141,20 +38,53 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    DisplayCanvas canvas(
+    evrgb::EventVisualizer canvas(
         reader.getRgbFrameSize(),
         reader.getEventFrameSize()
     );
 
+    // Load and apply metadata for alignment
+    auto metadata = reader.getMetadata();
+    
+    if (metadata.has_value()) {
+        std::cout << "Loaded metadata from recording." << std::endl;
+        // Print metadata in JSON format
+        nlohmann::json j = *metadata;
+        std::cout << "\n========== Metadata Content ==========\n" << j.dump(2) << "\n=====================================\n" << std::endl;
+
+        // Set intrinsics if available
+        if (metadata->rgb.intrinsics && metadata->dvs.intrinsics) {
+            canvas.setIntrinsics(*metadata->rgb.intrinsics, *metadata->dvs.intrinsics);
+            std::cout << "Applied camera intrinsics from metadata." << std::endl;
+        }
+
+        // Set calibration if available
+        if (std::holds_alternative<evrgb::AffineTransform>(metadata->calibration)) {
+            auto affine = std::get<evrgb::AffineTransform>(metadata->calibration);
+            canvas.setCalibration(affine);
+            std::cout << "Applied affine calibration from metadata: tx=" << affine.A(0, 2)
+                      << ", ty=" << affine.A(1, 2) << std::endl;
+        }
+
+        // Set flip X for beam splitter arrangement
+        if (metadata->arrangement == evrgb::ComboArrangement::BEAM_SPLITTER) {
+            canvas.setFlipX(true);
+            std::cout << "Applied flip X for beam splitter arrangement." << std::endl;
+        }
+    } else {
+        std::cout << "No metadata found in recording, using default settings." << std::endl;
+        canvas.setFlipX(true); // Default flip for typical setups
+    }
+
     replay_status.last_frame_ts_us = reader.getRecordingStartTimeUs().value_or(0);
     replay_status.current_ts_us = replay_status.last_frame_ts_us + replay_status.base_time_step_ms * 1000;
-    std::shared_ptr<dvsense::Event2DVector> remianing_events = std::make_shared<dvsense::Event2DVector>(); // Buffer for events when frame changes
+    std::shared_ptr<dvsense::Event2DVector> remaining_events = std::make_shared<dvsense::Event2DVector>(); // Buffer for events when frame changes
     cv::namedWindow("Recorded Replay", cv::WINDOW_AUTOSIZE);
 
     evrgb::RecordedSyncReader::Sample sample;
     reader.next(sample); // Preload first sample to set initial timestamps
     dvsense::Event2DVector::const_iterator it_start, it_end;
-    canvas.updateFrame(sample.rgb);
+    canvas.updateRgbFrame(sample.rgb);
 
     while (true) {
         if (sample.rgb.empty()) {
@@ -179,17 +109,17 @@ int main(int argc, char* argv[])
                     return ts < e.timestamp;
                 });
         } else {
-            it_start = it_end = remianing_events->end();
+            it_start = it_end = remaining_events->end();
         }
         if (replay_status.current_ts_us >= sample.exposure_end_us){
             // Move to next frame
             if (has_events) {
-                remianing_events->insert(
-                    remianing_events->end(),
+                remaining_events->insert(
+                    remaining_events->end(),
                     it_start,
                     it_end);
             }
-            canvas.updateFrame(sample.rgb);
+            canvas.updateRgbFrame(sample.rgb);
             if (!reader.next(sample)) {
                 break;
             }
@@ -204,14 +134,16 @@ int main(int argc, char* argv[])
         replay_status.current_ts_us += step_us;
         
         cv::Mat view;
-        canvas.visualizeEvents(
-            remianing_events->begin(),
-            remianing_events->end(),
-            it_start,
-            it_end,
-            view);
-        remianing_events->clear();
-
+        if (!remaining_events->empty()){
+            remaining_events->insert(
+                remaining_events->end(),
+                it_start,
+                it_end);
+            canvas.visualizeEvents(remaining_events->begin(), remaining_events->end(), view);
+            remaining_events->clear();
+        } else {
+            canvas.visualizeEvents(it_start, it_end, view);
+        }
 
         std::string info = "Frame " + std::to_string(sample.frame_index) +
                            " | ts us: [" + std::to_string(sample.exposure_start_us) + ", " +
@@ -226,7 +158,11 @@ int main(int argc, char* argv[])
         } if ((key & 0xff) == 'm' || (key & 0xff) == 'M') {
             auto mode = canvas.toggleDisplayMode();
             std::cout << "Display mode switched to "
-                      << (mode == DisplayCanvas::OVERLAY ? "OVERLAY." : "SIDE_BY_SIDE.") << std::endl;
+                      << (mode == evrgb::EventVisualizer::DisplayMode::Overlay ? "OVERLAY." : "SIDE_BY_SIDE.") << std::endl;
+        } else if ((key & 0xff) == 'f' || (key & 0xff) == 'F') {
+            const bool current_flip = canvas.flipX();
+            canvas.setFlipX(!current_flip);
+            std::cout << "Flip X " << (!current_flip ? "enabled." : "disabled.") << std::endl;
         } else if ((key & 0xff) == ' ') {
             replay_status.slowmo_active = !replay_status.slowmo_active;
             std::cout << "Slow-mo " << (replay_status.slowmo_active ? "activated." : "deactivated.") << std::endl;

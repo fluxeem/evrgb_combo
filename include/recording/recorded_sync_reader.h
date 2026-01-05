@@ -21,6 +21,7 @@
 #endif
 
 #include "DvsenseDriver/FileReader/DvsFileReader.h"
+#include "core/combo_types.h"
 
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
@@ -41,6 +42,7 @@ public:
         std::string video = "combo_rgb.mp4";
         std::string csv = "combo_timestamps.csv";
         std::string events = "combo_events.raw";
+        std::string metadata = "metadata.json";
     };
 
     struct Sample {
@@ -110,6 +112,19 @@ public:
     size_t frameCount() const;
     bool isOpen() const;
 
+    /**
+     * \if ENGLISH
+     * @brief Get the metadata associated with the recording.
+     * @return std::optional<ComboMetadata>  The metadata if available, otherwise std::nullopt.
+     * \endif
+     * 
+     * \if CHINESE
+     * @brief 获取与录制关联的元数据。
+     * @return std::optional<ComboMetadata>  如果可用则返回元数据，否则返回 std::nullopt。
+     * \endif
+     */
+    std::optional<ComboMetadata> getMetadata() const;
+
 private:
     struct FrameMeta {
         int frame_index = -1;
@@ -121,6 +136,7 @@ private:
     bool loadCsv();
     bool openVideo();
     bool openEvents();
+    bool loadMetadata();
 
     Paths paths_{};
     std::vector<FrameMeta> frames_{};
@@ -129,6 +145,7 @@ private:
     cv::VideoCapture cap_{};
     dvsense::DvsFile dvs_reader_{};
     bool opened_ = false;
+    std::optional<ComboMetadata> metadata_;
 };
 
 }  // namespace evrgb

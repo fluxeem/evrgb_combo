@@ -1,8 +1,34 @@
 #include "recording/synced_data_recorder.h"
 #include "utils/evrgb_logger.h"
+#include "core/version.h"
 
+#include <chrono>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <ctime>
+#include <sstream>
 #include <utility>
+#include <string>
+
+#include <nlohmann/json.hpp>
+
+namespace {
+// Format a system_clock time as a compact UTC string.
+std::string toUtcIsoString(const std::chrono::system_clock::time_point& tp)
+{
+    std::time_t t = std::chrono::system_clock::to_time_t(tp);
+    std::tm tm_utc{};
+    #ifdef _WIN32
+        gmtime_s(&tm_utc, &t);
+    #else
+        gmtime_r(&t, &tm_utc);
+    #endif
+    std::ostringstream oss;
+    oss << std::put_time(&tm_utc, "%Y-%m-%dT%H:%M:%SZ");
+    return oss.str();
+}
+}  // namespace
 
 namespace evrgb {
 
@@ -17,6 +43,8 @@ bool SyncedDataRecorder::start(const SyncedRecorderConfig& config)
     config_ = config;
     started_ = false;
     frame_size_ = cv::Size(0, 0);
+    frame_count_ = 0;
+    event_count_ = 0;
 
     if (config_.output_dir.empty()) {
         LOG_WARN("Recorder start skipped: output directory is empty");
@@ -33,6 +61,7 @@ bool SyncedDataRecorder::start(const SyncedRecorderConfig& config)
     rgb_path_ = (out_dir / "combo_rgb.mp4").string();
     csv_path_ = (out_dir / "combo_timestamps.csv").string();
     dvs_raw_path_ = (out_dir / "combo_events.raw").string();
+    metadata_path_ = (out_dir / "metadata.json").string();
 
     csv_stream_.open(csv_path_, std::ios::out | std::ios::trunc);
     if (!csv_stream_.is_open()) {
@@ -129,6 +158,8 @@ bool SyncedDataRecorder::record(const RgbImageWithTimestamp& rgb, const std::vec
         return false;
     }
 
+    event_count_ += events.size();
+
     cv::Mat bgr = toBgr8(rgb.image);
     if (bgr.empty()) {
         LOG_WARN("Skipping frame write: empty or unsupported image");
@@ -137,6 +168,7 @@ bool SyncedDataRecorder::record(const RgbImageWithTimestamp& rgb, const std::vec
             return false;
         }
         writer_.write(bgr);
+        ++frame_count_;
     }
 
     writeCsvRow(rgb);
@@ -147,6 +179,10 @@ void SyncedDataRecorder::stop()
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
+    if (!started_) {
+        return;
+    }
+
     if (writer_.isOpened()) {
         writer_.release();
     }
@@ -154,6 +190,39 @@ void SyncedDataRecorder::stop()
     if (csv_stream_.is_open()) {
         csv_stream_.flush();
         csv_stream_.close();
+    }
+
+    // Persist recording metadata atomically.
+    nlohmann::json metadata;
+    metadata["schema_version"] = "1.1";
+    metadata["created_utc"] = toUtcIsoString(std::chrono::system_clock::now());
+    metadata["sdk_version"] = EVRGB_VERSION;
+    metadata["recording_config"] = {
+        {"fps", config_.fps},
+        {"fourcc", config_.fourcc},
+        {"output_dir", config_.output_dir}
+    };
+    metadata["combo_metadata"] = config_.combo_metadata;
+    metadata["outputs"] = {
+        {"rgb_path", rgb_path_},
+        {"csv_path", csv_path_},
+        {"dvs_raw_path", dvs_raw_path_},
+        {"metadata_path", metadata_path_}
+    };
+    metadata["stats"] = {
+        {"frame_count", frame_count_},
+        {"event_count", event_count_},
+        {"frame_width", frame_size_.width},
+        {"frame_height", frame_size_.height}
+    };
+
+    {
+        std::ofstream meta_out(metadata_path_, std::ios::out | std::ios::trunc);
+        if (!meta_out.is_open()) {
+            LOG_ERROR("Failed to open metadata file: %s", metadata_path_.c_str());
+        } else {
+            meta_out << metadata.dump(2);
+        }
     }
 
     started_ = false;

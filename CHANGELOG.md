@@ -8,17 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial changelog setup
+- EventVisualizer class for real-time event visualization with overlay/side-by-side modes
+- Beam splitter alignment example with interactive calibration tools
+- Camera intrinsics support with CameraIntrinsics structure and factory pattern
+- Calibration information system (CalibInfo, RigidTransform, AffineTransform)
+- Metadata persistence system (CameraMetadata, ComboMetadata) with JSON serialization
+- Recording metadata support in SyncedDataRecorder and RecordedSyncReader
+- Device model infrastructure for RGB and DVS cameras
+- Camera arrangement modes (STEREO, BEAM_SPLITTER) with arrangement-specific calibration
+- nlohmann_json dependency as Git submodule
+- Comprehensive documentation: Event Visualization Tutorial, Calibration Tutorial, updated tutorials
 
 ### Changed
-
-### Deprecated
-
-### Removed
+- Camera management refactoring with shared pointers and factory pattern
+- Combo interface enhancements with consolidated metadata handling
+- Recording system improvements with metadata support
+- Documentation restructuring and tutorial reorganization
+- Build system updates for new dependencies and source files
 
 ### Fixed
+- JSON serialization linking issues
+- Interface compatibility issues
+- Documentation inconsistencies
 
-### Security
+### Removed
+- Unused combo_threads.h header file
+
+## [1.1.0] - 2026-01-05
+
+### Added
+- New calibration information support for both STEREO and BEAM_SPLITTER configurations
+- CalibInfo class for managing calibration data
+- Beam splitter alignment example for precise optical setup
+- Enhanced documentation with calibration tutorial
+- Support for hardware configuration identification and management
+
+### Changed
+- Updated version to 1.1.0
+- Improved hardware configuration handling
+- Enhanced documentation structure
+
+### Fixed
+- Minor documentation improvements
 
 ## [1.0.1] - 2026-01-02
 

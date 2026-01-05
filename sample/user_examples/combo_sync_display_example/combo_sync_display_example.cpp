@@ -7,7 +7,8 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
-#include <atomic>
+
+#include "utils/event_visualizer.h"
 
 #ifdef _WIN32
     #include "opencv2/opencv.hpp"
@@ -20,15 +21,10 @@
 namespace {
 
 /**
- * @brief Thread-safe renderer that overlays DVS events onto RGB frames.
+ * @brief Thread-safe renderer that overlays DVS events onto RGB frames using the shared SDK visualizer.
  */
 class SyncedFrameRenderer {
 public:
-    enum class DisplayMode {
-        OverlayOnly,
-        SideBySide
-    };
-
     void update(const evrgb::RgbImageWithTimestamp& rgb_data,
                 const std::vector<dvsense::Event2D>& events) {
         cv::Mat bgr = ensureBgrFrame(rgb_data.image);
@@ -36,24 +32,22 @@ public:
             return;
         }
 
-        const cv::Size event_size = updateEventFrameSize(events);
-        const cv::Point manual_offset = getEventOffset();
+        event_size_ = inferEventFrameSize(events, event_size_);
+        ensureVisualizer(bgr.size());
+        if (!visualizer_) {
+            return;
+        }
+
+        visualizer_->setEventSize(event_size_);
+        visualizer_->setEventOffset(manual_offset_);
+
+        if (!visualizer_->updateRgbFrame(bgr)) {
+            return;
+        }
 
         cv::Mat final_view;
-        if (display_mode_ == DisplayMode::SideBySide) {
-            // 1. Original RGB (Left)
-            cv::Mat left_view = bgr.clone();
-
-            // 2. Create Event-only frame on black background (Right)
-            cv::Mat right_view = cv::Mat::zeros(bgr.size(), bgr.type());
-            overlayEvents(right_view, events, event_size, manual_offset);
-
-            // 3. Combine side-by-side
-            cv::hconcat(left_view, right_view, final_view);
-        } else {
-            // Overlay only
-            final_view = bgr.clone();
-            overlayEvents(final_view, events, event_size, manual_offset);
+        if (!visualizer_->visualizeEvents(events, final_view)) {
+            return;
         }
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -61,23 +55,22 @@ public:
     }
 
     void toggleDisplayMode() {
-        if (display_mode_ == DisplayMode::OverlayOnly) {
-            display_mode_ = DisplayMode::SideBySide;
-            std::cout << "Display Mode: Side-by-Side" << std::endl;
-        } else {
-            display_mode_ = DisplayMode::OverlayOnly;
-            std::cout << "Display Mode: Overlay Only" << std::endl;
+        if (!visualizer_) {
+            return;
         }
+        const auto mode = visualizer_->toggleDisplayMode();
+        std::cout << "Display Mode: "
+                  << (mode == evrgb::EventVisualizer::DisplayMode::SideBySide ? "Side-by-Side" : "Overlay Only")
+                  << std::endl;
     }
 
     cv::Point adjustEventOffset(const cv::Point& delta) {
-        const int new_x = (event_offset_x_ += delta.x);
-        const int new_y = (event_offset_y_ += delta.y);
-        return {new_x, new_y};
-    }
-
-    cv::Point getEventOffset() const {
-        return {event_offset_x_.load(), event_offset_y_.load()};
+        manual_offset_.x += delta.x;
+        manual_offset_.y += delta.y;
+        if (visualizer_) {
+            visualizer_->setEventOffset(manual_offset_);
+        }
+        return manual_offset_;
     }
 
     bool getLatestFrame(cv::Mat& out_frame) {
@@ -124,49 +117,33 @@ private:
         return {};
     }
 
-    static void overlayEvents(cv::Mat& frame,
-                              const std::vector<dvsense::Event2D>& events,
-                              const cv::Size& event_frame_size,
-                              const cv::Point& manual_offset) {
-        if (events.empty()) {
-            return;
-        }
-
-        const int effective_width = event_frame_size.width > 0 ? event_frame_size.width : frame.cols;
-        const int effective_height = event_frame_size.height > 0 ? event_frame_size.height : frame.rows;
-        const int offset_x = (frame.cols - effective_width) / 2;
-        const int offset_y = (frame.rows - effective_height) / 2;
-
+    static cv::Size2i inferEventFrameSize(const std::vector<dvsense::Event2D>& events, cv::Size2i current) {
+        int max_x = current.width;
+        int max_y = current.height;
         for (const auto& e : events) {
-            int x = static_cast<int>(e.x);
-            int y = static_cast<int>(e.y);
-            const int px = x + offset_x + manual_offset.x;
-            const int py = y + offset_y + manual_offset.y;
-            if (px < 0 || py < 0 || px >= frame.cols || py >= frame.rows) {
-                continue;
-            }
-
-            frame.at<cv::Vec3b>(py, px) =
-                e.polarity ? cv::Vec3b(0, 0, 255)
-                           : cv::Vec3b(255, 0, 0);
+            max_x = std::max(max_x, static_cast<int>(e.x) + 1);
+            max_y = std::max(max_y, static_cast<int>(e.y) + 1);
         }
+        return {max_x, max_y};
     }
 
-    cv::Size updateEventFrameSize(const std::vector<dvsense::Event2D>& events) {
-        for (const auto& e : events) {
-            event_frame_size_.width = std::max(event_frame_size_.width, static_cast<int>(e.x) + 1);
-            event_frame_size_.height = std::max(event_frame_size_.height, static_cast<int>(e.y) + 1);
+    void ensureVisualizer(const cv::Size& rgb_size) {
+        if (visualizer_) {
+            return;
         }
-        return event_frame_size_;
+        if (rgb_size.width <= 0 || rgb_size.height <= 0) {
+            return;
+        }
+        visualizer_ = std::make_unique<evrgb::EventVisualizer>(rgb_size, event_size_);
+        visualizer_->setEventOffset(manual_offset_);
     }
 
 private:
     cv::Mat latest_frame_;
     std::mutex mutex_;
-    cv::Size event_frame_size_;
-    std::atomic<int> event_offset_x_{0};
-    std::atomic<int> event_offset_y_{0};
-    std::atomic<DisplayMode> display_mode_{DisplayMode::OverlayOnly};
+    cv::Size2i event_size_{};
+    cv::Point2i manual_offset_{0, 0};
+    std::unique_ptr<evrgb::EventVisualizer> visualizer_;
 };
 
 /**
@@ -249,7 +226,7 @@ int main() {
     std::cout << "Using RGB: " << rgb_serial << std::endl;
     std::cout << "Using DVS: " << dvs_serial << std::endl;
 
-    evrgb::Combo combo(rgb_serial, dvs_serial, 100);
+    evrgb::Combo combo(rgb_serial, dvs_serial,  evrgb::Combo::Arrangement::STEREO, 100);
 
     evrgb::SyncedRecorderConfig recorder_cfg;
     recorder_cfg.output_dir = "recordings";

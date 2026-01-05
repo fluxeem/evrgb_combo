@@ -21,6 +21,7 @@
 #include "camera/rgb_camera.h"
 #include "sync/event_vector_pool.h"
 #include "recording/synced_data_recorder.h"
+#include "utils/calib_info.h"
 
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
@@ -45,7 +46,9 @@ EVRGB_API std::tuple<std::vector<RgbCameraInfo>, std::vector<dvsense::CameraDesc
 
 class EVRGB_API Combo {
 public:
-    Combo(std::string rgb_serial = "", std::string dvs_serial = "", size_t max_buffer_size = 10);
+    using Arrangement = ComboArrangement;
+
+    Combo(std::string rgb_serial = "", std::string dvs_serial = "", Arrangement arrangement = Arrangement::STEREO, size_t max_buffer_size = 10);
     ~Combo();
 
     // Disable copy (manages device resources)
@@ -89,6 +92,32 @@ public:
      * @return Shared pointer to the RGB camera interface
      */
     std::shared_ptr<IRgbCamera> getRgbCamera() const { return rgb_camera_; }
+
+    /**
+     * #if ENGLISH
+     * @brief Get the managed DVS camera wrapper
+     * @return Shared pointer to the wrapper DVS camera interface
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取封装的 DVS 相机对象
+     * @return 封装 DVS 相机的共享指针
+     * #endif
+     */
+    std::shared_ptr<DvsCamera> getDvsCamera() const { return dvs_camera_; }
+
+    /**
+     * #if ENGLISH
+     * @brief Get the raw DVS camera handle from the wrapper
+     * @return Shared pointer to the underlying DVS camera interface
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取底层原始 DVS 相机句柄
+     * @return 底层 DVS 相机接口的共享指针
+     * #endif
+     */
+    std::shared_ptr<dvsense::DvsCamera> getRawDvsCamera() const { return dvs_camera_ ? dvs_camera_->getDvsCamera() : nullptr; }
 
     /**
      * @brief Get the number of images in the RGB buffer.
@@ -155,14 +184,52 @@ public:
      */
     bool stopRecording();
 
+    /**
+     * #if ENGLISH
+     * @brief Get the arrangement mode of the combo camera.
+     * @return Arrangement mode.
+     * #endif
+     * 
+     * #if CHINESE
+     * @brief 获取组合相机的排列模式。
+     * @return 排列模式。
+     * #endif
+     */
+    Arrangement getArrangement() const { return arrangement_; }
+
+    /**
+     * @brief Gather all available combo metadata (devices, arrangement, calibration).
+     */
+    ComboMetadata getMetadata() const;
+
+    /**
+     * @brief Apply provided metadata to the combo (arrangement, calibration, intrinsics when available).
+     */
+    bool applyMetadata(const ComboMetadata& metadata, bool apply_intrinsics = true);
+
+    /**
+     * @brief Persist metadata as JSON to disk.
+     */
+    bool saveMetadata(const std::string& path, std::string* error_message = nullptr) const;
+
+    /**
+     * @brief Load metadata from disk and apply it.
+     */
+    bool loadMetadata(const std::string& path, std::string* error_message = nullptr);
+
+    ComboCalibrationInfo calibration_info{};  ///< Calibration information between RGB and DVS cameras
+
 private:
     std::string rgb_serial_;
     std::string dvs_serial_;
+    std::string rgb_model_;
+    std::string dvs_model_;
     std::shared_ptr<IRgbCamera> rgb_camera_;                // managed RGB camera instance
-    DvsCamera dvs_camera_; // managed DVS camera (if initialized)
-    bool dvs_camera_created_ = false; // flag to track if DVS camera was created
+    std::shared_ptr<DvsCamera> dvs_camera_; // managed DVS camera (if initialized)
     bool rgb_initialized_ = false;
     bool dvs_initialized_ = false;
+
+    Arrangement arrangement_;
     
     // RGB image buffer with index
     struct ImageWithIndex {

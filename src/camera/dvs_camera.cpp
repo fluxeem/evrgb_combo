@@ -1,5 +1,6 @@
 #include "camera/dvs_camera.h"
 #include "utils/evrgb_logger.h"
+#include "utils/calib_info.h"
 #include <algorithm>
 
 namespace evrgb
@@ -323,6 +324,27 @@ void DvsCamera::setState(CameraState newState)
                   static_cast<int>(camera_state_), static_cast<int>(newState));
         camera_state_ = newState;
     }
+}
+
+bool DvsCamera::getDeviceModelName(std::string& model_name)
+{
+    if (!dvs_camera_) {
+        LOG_ERROR("DVS camera not initialized, cannot get model name");
+        return false;
+    }
+
+    model_name = dvs_camera_->getDescription().product;
+    return true;
+}
+
+void DvsCamera::setIntrinsics(const CameraIntrinsics& intrinsics)
+{
+    intrinsics_ = intrinsics;
+}
+
+std::optional<CameraIntrinsics> DvsCamera::getIntrinsics() const
+{
+    return intrinsics_;
 }
 
 }  // namespace evrgb

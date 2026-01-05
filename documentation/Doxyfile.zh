@@ -4,7 +4,7 @@
 # Project related configuration options
 #---------------------------------------------------------------------------
 PROJECT_NAME           = "EvRGB Combo SDK"
-PROJECT_NUMBER         = "1.0.1"
+PROJECT_NUMBER         = "1.1.0"
 PROJECT_BRIEF          = "SDK for Event and RGB Camera Combination"
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = docs/zh
@@ -121,6 +121,8 @@ INPUT                  = include \
                          documentation/zh/CAMERA_USAGE_TUTORIAL.md \
                          documentation/zh/PARAMETER_TUNING_TUTORIAL.md \
                          documentation/zh/RECORDING_TUTORIAL.md \
+                         documentation/zh/CALIBRATION_TUTORIAL.md \
+                         documentation/zh/VISUALIZATION_TUTORIAL.md \
                          documentation/zh/SAMPLES.md
 
 INPUT_ENCODING         = UTF-8
