@@ -64,12 +64,21 @@ struct EVRGB_API AffineTransform {
 
 using ComboCalibrationInfo = std::variant<std::monostate, RigidTransform, AffineTransform>;
 
-// JSON serialization helpers
-void to_json(nlohmann::json& j, const CameraIntrinsics& intrinsics);
-void from_json(const nlohmann::json& j, CameraIntrinsics& intrinsics);
+// JSON serialization helpers (public API names)
+EVRGB_API void toJson(nlohmann::json& j, const CameraIntrinsics& intrinsics);
+EVRGB_API void fromJson(const nlohmann::json& j, CameraIntrinsics& intrinsics);
+EVRGB_API void toJson(nlohmann::json& j, const ComboCalibrationInfo& calib);
+EVRGB_API void fromJson(const nlohmann::json& j, ComboCalibrationInfo& calib);
 
-void to_json(nlohmann::json& j, const ComboCalibrationInfo& calib);
-void from_json(const nlohmann::json& j, ComboCalibrationInfo& calib);
+// Standard nlohmann entry points to keep ADL working
+EVRGB_API void to_json(nlohmann::json& j, const CameraIntrinsics& intrinsics);
+EVRGB_API void from_json(const nlohmann::json& j, CameraIntrinsics& intrinsics);
+EVRGB_API void to_json(nlohmann::json& j, const RigidTransform& transform);
+EVRGB_API void from_json(const nlohmann::json& j, RigidTransform& transform);
+EVRGB_API void to_json(nlohmann::json& j, const AffineTransform& transform);
+EVRGB_API void from_json(const nlohmann::json& j, AffineTransform& transform);
+EVRGB_API void to_json(nlohmann::json& j, const ComboCalibrationInfo& calib);
+EVRGB_API void from_json(const nlohmann::json& j, ComboCalibrationInfo& calib);
 
 // File IO helpers
 EVRGB_API bool loadComboCalibration(const std::string& path, ComboCalibrationInfo& out, std::string* error_message = nullptr);

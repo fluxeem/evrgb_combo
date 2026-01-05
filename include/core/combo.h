@@ -46,11 +46,7 @@ EVRGB_API std::tuple<std::vector<RgbCameraInfo>, std::vector<dvsense::CameraDesc
 
 class EVRGB_API Combo {
 public:
-
-    enum class Arrangement {
-        STEREO = 0,
-        BEAM_SPLITTER = 1
-    };
+    using Arrangement = ComboArrangement;
 
     Combo(std::string rgb_serial = "", std::string dvs_serial = "", Arrangement arrangement = Arrangement::STEREO, size_t max_buffer_size = 10);
     ~Combo();
@@ -201,6 +197,26 @@ public:
      */
     Arrangement getArrangement() const { return arrangement_; }
 
+    /**
+     * @brief Gather all available combo metadata (devices, arrangement, calibration).
+     */
+    ComboMetadata getMetadata() const;
+
+    /**
+     * @brief Apply provided metadata to the combo (arrangement, calibration, intrinsics when available).
+     */
+    bool applyMetadata(const ComboMetadata& metadata, bool apply_intrinsics = true);
+
+    /**
+     * @brief Persist metadata as JSON to disk.
+     */
+    bool saveMetadata(const std::string& path, std::string* error_message = nullptr) const;
+
+    /**
+     * @brief Load metadata from disk and apply it.
+     */
+    bool loadMetadata(const std::string& path, std::string* error_message = nullptr);
+
     ComboCalibrationInfo calibration_info{};  ///< Calibration information between RGB and DVS cameras
 
 private:
@@ -210,7 +226,6 @@ private:
     std::string dvs_model_;
     std::shared_ptr<IRgbCamera> rgb_camera_;                // managed RGB camera instance
     std::shared_ptr<DvsCamera> dvs_camera_; // managed DVS camera (if initialized)
-    bool dvs_camera_created_ = false; // flag to track if DVS camera was created
     bool rgb_initialized_ = false;
     bool dvs_initialized_ = false;
 
@@ -290,8 +305,6 @@ private:
     
     bool synchronizeImageAndTrigger(cv::Mat& image, uint64_t& exposure_start_ts, uint64_t& exposure_end_ts, uint32_t& image_index);
 };
-
-const std::string EVRGB_API toString(Combo::Arrangement arrangement);
 
 }  // namespace evrgb
 

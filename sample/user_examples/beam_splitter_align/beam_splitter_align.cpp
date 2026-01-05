@@ -8,6 +8,8 @@
 #include <vector>
 #include <algorithm>
 
+#include <nlohmann/json.hpp>
+
 #include "utils/event_visualizer.h"
 #include "utils/calib_info.h"
 
@@ -264,6 +266,12 @@ int main() {
     if (!combo.start()) {
         std::cerr << "Combo start failed" << std::endl;
         return -1;
+    }
+
+    {
+        auto meta = combo.getMetadata();
+        nlohmann::json j = meta;
+        std::cout << "Combo metadata:\n" << j.dump(2) << std::endl;
     }
 
     renderer->setIntrinsics(rgb_intrinsics, dvs_intrinsics);

@@ -126,7 +126,7 @@ CameraIntrinsics CameraIntrinsics::idealFromPhysical(double focal_length_mm,
     return intr;
 }
 
-void to_json(nlohmann::json& j, const CameraIntrinsics& intrinsics)
+void toJson(nlohmann::json& j, const CameraIntrinsics& intrinsics)
 {
     j = {
         {"fx", intrinsics.fx},
@@ -140,7 +140,7 @@ void to_json(nlohmann::json& j, const CameraIntrinsics& intrinsics)
     };
 }
 
-void from_json(const nlohmann::json& j, CameraIntrinsics& intrinsics)
+void fromJson(const nlohmann::json& j, CameraIntrinsics& intrinsics)
 {
     intrinsics.fx = j.value("fx", 0.0);
     intrinsics.fy = j.value("fy", 0.0);
@@ -152,7 +152,26 @@ void from_json(const nlohmann::json& j, CameraIntrinsics& intrinsics)
     intrinsics.distortion = j.value("distortion", std::vector<double>{});
 }
 
-void to_json(nlohmann::json& j, const RigidTransform& rt)
+EVRGB_API void to_json(nlohmann::json& j, const CameraIntrinsics& intrinsics)
+{
+    j = {
+        {"fx", intrinsics.fx},
+        {"fy", intrinsics.fy},
+        {"cx", intrinsics.cx},
+        {"cy", intrinsics.cy},
+        {"skew", intrinsics.skew},
+        {"width", intrinsics.width},
+        {"height", intrinsics.height},
+        {"distortion", intrinsics.distortion}
+    };
+}
+
+EVRGB_API void from_json(const nlohmann::json& j, CameraIntrinsics& intrinsics)
+{
+    fromJson(j, intrinsics);
+}
+
+EVRGB_API void to_json(nlohmann::json& j, const RigidTransform& rt)
 {
     j = {
         {"rotation", mat33ToJson(rt.R)},
@@ -160,7 +179,7 @@ void to_json(nlohmann::json& j, const RigidTransform& rt)
     };
 }
 
-void from_json(const nlohmann::json& j, RigidTransform& rt)
+EVRGB_API void from_json(const nlohmann::json& j, RigidTransform& rt)
 {
     if (j.contains("rotation")) {
         rt.R = jsonToMat33(j.at("rotation"));
@@ -179,12 +198,12 @@ void from_json(const nlohmann::json& j, RigidTransform& rt)
     }
 }
 
-void to_json(nlohmann::json& j, const AffineTransform& a)
+EVRGB_API void to_json(nlohmann::json& j, const AffineTransform& a)
 {
     j = mat23ToJson(a.A);
 }
 
-void from_json(const nlohmann::json& j, AffineTransform& a)
+EVRGB_API void from_json(const nlohmann::json& j, AffineTransform& a)
 {
     // Support legacy formats: either direct 2x3 array or object with "matrix".
     if (j.is_array()) {
@@ -200,7 +219,7 @@ void from_json(const nlohmann::json& j, AffineTransform& a)
     a.A = jsonToMat23(j);
 }
 
-void to_json(nlohmann::json& j, const ComboCalibrationInfo& calib)
+EVRGB_API void to_json(nlohmann::json& j, const ComboCalibrationInfo& calib)
 {
     j = nlohmann::json::object();
     std::visit([
@@ -215,7 +234,7 @@ void to_json(nlohmann::json& j, const ComboCalibrationInfo& calib)
         calib);
 }
 
-void from_json(const nlohmann::json& j, ComboCalibrationInfo& calib)
+EVRGB_API void from_json(const nlohmann::json& j, ComboCalibrationInfo& calib)
 {
     calib = std::monostate{};
     if (j.contains("stereo_extrinsics")) {
@@ -223,6 +242,16 @@ void from_json(const nlohmann::json& j, ComboCalibrationInfo& calib)
     } else if (j.contains("beam_splitter_affine")) {
         calib = j.at("beam_splitter_affine").get<AffineTransform>();
     }
+}
+
+EVRGB_API void toJson(nlohmann::json& j, const ComboCalibrationInfo& calib)
+{
+    to_json(j, calib);
+}
+
+EVRGB_API void fromJson(const nlohmann::json& j, ComboCalibrationInfo& calib)
+{
+    from_json(j, calib);
 }
 
 bool loadComboCalibration(const std::string& path, ComboCalibrationInfo& out, std::string* error_message)

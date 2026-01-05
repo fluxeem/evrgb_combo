@@ -1,12 +1,111 @@
 #include "core/combo.h"
+#include "core/combo_types.h"
 #include "utils/evrgb_logger.h"
+#include "utils/calib_info.h"
 
 #include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <sstream>
 #include <utility>
 
 #include "sync/trigger_buffer.h"
+#include <nlohmann/json.hpp>
 
 namespace evrgb {
+
+// Explicit implementations of to_json/from_json functions to avoid linking issues
+void to_json(nlohmann::json& j, const CameraIntrinsics& intrinsics) {
+    j = {
+        {"fx", intrinsics.fx},
+        {"fy", intrinsics.fy},
+        {"cx", intrinsics.cx},
+        {"cy", intrinsics.cy},
+        {"skew", intrinsics.skew},
+        {"width", intrinsics.width},
+        {"height", intrinsics.height},
+        {"distortion", intrinsics.distortion}
+    };
+}
+
+void from_json(const nlohmann::json& j, CameraIntrinsics& intrinsics) {
+    intrinsics.fx = j.value("fx", 0.0);
+    intrinsics.fy = j.value("fy", 0.0);
+    intrinsics.cx = j.value("cx", 0.0);
+    intrinsics.cy = j.value("cy", 0.0);
+    intrinsics.skew = j.value("skew", 0.0);
+    intrinsics.width = j.value("width", 0);
+    intrinsics.height = j.value("height", 0);
+    intrinsics.distortion = j.value("distortion", std::vector<double>{});
+}
+
+void to_json(nlohmann::json& j, const RigidTransform& rt) {
+    j = {
+        {"rotation", nlohmann::json::array({rt.R(0,0), rt.R(0,1), rt.R(0,2), rt.R(1,0), rt.R(1,1), rt.R(1,2), rt.R(2,0), rt.R(2,1), rt.R(2,2)})},
+        {"translation", nlohmann::json::array({rt.t[0], rt.t[1], rt.t[2]})}
+    };
+}
+
+void from_json(const nlohmann::json& j, RigidTransform& rt) {
+    if (j.contains("rotation")) {
+        const auto& r = j.at("rotation");
+        if (r.is_array() && r.size() == 9) {
+            rt.R = cv::Matx33d(r[0].get<double>(), r[1].get<double>(), r[2].get<double>(),
+                             r[3].get<double>(), r[4].get<double>(), r[5].get<double>(),
+                             r[6].get<double>(), r[7].get<double>(), r[8].get<double>());
+        }
+    }
+    if (j.contains("translation")) {
+        const auto& t = j.at("translation");
+        if (t.is_array() && t.size() == 3) {
+            rt.t = cv::Vec3d(t[0].get<double>(), t[1].get<double>(), t[2].get<double>());
+        }
+    }
+}
+
+void to_json(nlohmann::json& j, const AffineTransform& a) {
+    j = nlohmann::json::array({a.A(0,0), a.A(0,1), a.A(0,2), a.A(1,0), a.A(1,1), a.A(1,2)});
+}
+
+void from_json(const nlohmann::json& j, AffineTransform& a) {
+    if (j.is_array() && j.size() == 6) {
+        a.A = cv::Matx23d(j[0].get<double>(), j[1].get<double>(), j[2].get<double>(),
+                         j[3].get<double>(), j[4].get<double>(), j[5].get<double>());
+    }
+}
+
+void to_json(nlohmann::json& j, const ComboCalibrationInfo& calib) {
+    j = nlohmann::json::object();
+    std::visit([&j](auto&& value) {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, RigidTransform>) {
+            j["stereo_extrinsics"] = value;
+        } else if constexpr (std::is_same_v<T, AffineTransform>) {
+            j["beam_splitter_affine"] = value;
+        }
+    }, calib);
+}
+
+void from_json(const nlohmann::json& j, ComboCalibrationInfo& calib) {
+    calib = std::monostate{};
+    if (j.contains("stereo_extrinsics")) {
+        calib = j.at("stereo_extrinsics").get<RigidTransform>();
+    } else if (j.contains("beam_splitter_affine")) {
+        calib = j.at("beam_splitter_affine").get<AffineTransform>();
+    }
+}
+
+namespace {
+
+std::string toUpperCopy(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
+    return value;
+}
+
+}  // namespace
 
 std::tuple<std::vector<RgbCameraInfo>, std::vector<dvsense::CameraDescription>> enumerateAllCameras()
 {
@@ -37,7 +136,7 @@ Combo::~Combo()
         rgb_initialized_ = false;
     }
 
-    if (dvs_camera_created_ && dvs_camera_) {
+    if (dvs_initialized_ && dvs_camera_) {
         dvs_camera_->destroy();
         dvs_initialized_ = false;
     }
@@ -58,6 +157,7 @@ bool Combo::init()
             } else {
                 LOG_WARN("Failed to get RGB camera model name, error code: %d", status.code);
             }
+
         } else {
             LOG_WARN("RGB camera initialization failed (serial='%s')", rgb_serial_.c_str());
             success = false;
@@ -68,12 +168,9 @@ bool Combo::init()
         if (!dvs_camera_) dvs_camera_ = std::make_shared<DvsCamera>();
         if (dvs_camera_->initialize(dvs_serial_)) {
             dvs_initialized_ = true;
-            dvs_camera_created_ = true;
             std::string dvs_model;
-            std::cout << "DVS camera initialized successfully" << std::endl;
             if (dvs_camera_->getDeviceModelName(dvs_model)) {
                 dvs_model_ = dvs_model;
-                std::cout << "DVS Model: " << dvs_model_ << std::endl;
             }
         } else {
             LOG_WARN("DVS camera initialization failed (serial='%s')", dvs_serial_.c_str());
@@ -322,6 +419,117 @@ bool Combo::stopRecording()
     return true;
 }
 
+ComboMetadata Combo::getMetadata() const
+{
+    ComboMetadata meta{};
+    meta.arrangement = arrangement_;
+    meta.calibration = calibration_info;
+
+    if (rgb_camera_) {
+        meta.rgb.width = rgb_camera_->getWidth();
+        meta.rgb.height = rgb_camera_->getHeight();
+        if (!rgb_serial_.empty()) {
+            meta.rgb.serial = rgb_serial_;
+        }
+        // Prefer querying the camera for fresh model info to avoid stale cache.
+        StringProperty model_prop;
+        if (rgb_camera_->getDeviceModelName(model_prop).success()) {
+            meta.rgb.model = model_prop.value;
+        }
+        StringProperty vendor_prop;
+        if (rgb_camera_->getString("DeviceVendorName", vendor_prop).success()) {
+            meta.rgb.manufacturer = vendor_prop.value;
+        } else {
+            meta.rgb.manufacturer = "Unknown";
+        }
+        if (auto intrinsics = rgb_camera_->getIntrinsics()) {
+            meta.rgb.intrinsics = intrinsics;
+        }
+    }
+
+    if (dvs_camera_) {
+        if (!dvs_serial_.empty()) {
+            meta.dvs.serial = dvs_serial_;
+        }
+        // DVS model fetched live when possible.
+        std::string dvs_model;
+        if (dvs_camera_->getDeviceModelName(dvs_model)) {
+            meta.dvs.model = dvs_model;
+        }
+        if (meta.dvs.manufacturer.empty()) {
+            //TODO: query actual manufacturer if possible
+            meta.dvs.manufacturer = "Dvsense";
+        }
+        if (auto intrinsics = dvs_camera_->getIntrinsics()) {
+            meta.dvs.intrinsics = intrinsics;
+        }
+    }
+
+    return meta;
+}
+
+bool Combo::applyMetadata(const ComboMetadata& metadata, bool apply_intrinsics)
+{
+    arrangement_ = metadata.arrangement;
+    calibration_info = metadata.calibration;
+
+    if (apply_intrinsics) {
+        if (metadata.rgb.intrinsics && rgb_camera_) {
+            rgb_camera_->setIntrinsics(*metadata.rgb.intrinsics);
+        }
+        if (metadata.dvs.intrinsics && dvs_camera_) {
+            dvs_camera_->setIntrinsics(*metadata.dvs.intrinsics);
+        }
+    }
+
+    return true;
+}
+
+bool Combo::saveMetadata(const std::string& path, std::string* error_message) const
+{
+    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    if (!out.is_open()) {
+        if (error_message) {
+            *error_message = "Failed to open metadata file: " + path;
+        }
+        return false;
+    }
+
+    try {
+        nlohmann::json payload = getMetadata();
+        out << payload.dump(2);
+        return true;
+    } catch (const std::exception& ex) {
+        if (error_message) {
+            *error_message = ex.what();
+        }
+        return false;
+    }
+}
+
+bool Combo::loadMetadata(const std::string& path, std::string* error_message)
+{
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        if (error_message) {
+            *error_message = "Failed to open metadata file: " + path;
+        }
+        return false;
+    }
+
+    try {
+        nlohmann::json payload;
+        in >> payload;
+        ComboMetadata metadata = payload.get<ComboMetadata>();
+        return applyMetadata(metadata, true);
+    } catch (const std::exception& ex) {
+        if (error_message) {
+            *error_message = ex.what();
+        }
+        return false;
+    }
+}
+
 bool Combo::startDvsRawRecording()
 {
     auto recorder = getSyncedDataRecorder();
@@ -394,16 +602,107 @@ bool Combo::removeDvsEventCallback(uint32_t callback_id)
     return false;
 }
 
-const std::string EVRGB_API toString(Combo::Arrangement arrangement)
+ComboArrangement EVRGB_API arrangementFromString(const std::string& value)
+{
+    const std::string upper = toUpperCopy(value);
+    if (upper == "BEAM_SPLITTER" || upper == "BEAM-SPLITTER") {
+        return ComboArrangement::BEAM_SPLITTER;
+    }
+    return ComboArrangement::STEREO;
+}
+
+const std::string EVRGB_API toString(ComboArrangement arrangement)
 {
     switch (arrangement) {
-            case Combo::Arrangement::STEREO:
-                return "STEREO";
-            case Combo::Arrangement::BEAM_SPLITTER:
-                return "BEAM_SPLITTER";
-            default:
-                return "UNKNOWN";
-        }
+        case ComboArrangement::STEREO:
+            return "STEREO";
+        case ComboArrangement::BEAM_SPLITTER:
+            return "BEAM_SPLITTER";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+void toJson(nlohmann::json& j, const CameraMetadata& metadata)
+{
+    j = {
+        {"manufacturer", metadata.manufacturer},
+        {"model", metadata.model},
+        {"serial", metadata.serial},
+        {"width", metadata.width},
+        {"height", metadata.height}
+    };
+
+    if (metadata.intrinsics.has_value()) {
+        j["intrinsics"] = *metadata.intrinsics;
+    }
+}
+
+EVRGB_API void to_json(nlohmann::json& j, const CameraMetadata& metadata)
+{
+    toJson(j, metadata);
+}
+
+void fromJson(const nlohmann::json& j, CameraMetadata& metadata)
+{
+    metadata.manufacturer = j.value("manufacturer", "");
+    metadata.model = j.value("model", "");
+    metadata.serial = j.value("serial", "");
+    metadata.width = j.value("width", 0u);
+    metadata.height = j.value("height", 0u);
+
+    if (j.contains("intrinsics") && !j.at("intrinsics").is_null()) {
+        metadata.intrinsics = j.at("intrinsics").get<CameraIntrinsics>();
+    } else {
+        metadata.intrinsics.reset();
+    }
+}
+
+EVRGB_API void from_json(const nlohmann::json& j, CameraMetadata& metadata)
+{
+    fromJson(j, metadata);
+}
+
+void toJson(nlohmann::json& j, const ComboMetadata& metadata)
+{
+    j = {
+        {"arrangement", toString(metadata.arrangement)},
+        {"rgb", metadata.rgb},
+        {"dvs", metadata.dvs},
+        {"calibration", metadata.calibration}
+    };
+}
+
+EVRGB_API void to_json(nlohmann::json& j, const ComboMetadata& metadata)
+{
+    toJson(j, metadata);
+}
+
+void fromJson(const nlohmann::json& j, ComboMetadata& metadata)
+{
+    metadata.arrangement = arrangementFromString(j.value("arrangement", "STEREO"));
+
+    if (j.contains("rgb")) {
+        metadata.rgb = j.at("rgb").get<CameraMetadata>();
+    } else {
+        metadata.rgb = CameraMetadata{};
+    }
+
+    if (j.contains("dvs")) {
+        metadata.dvs = j.at("dvs").get<CameraMetadata>();
+    } else {
+        metadata.dvs = CameraMetadata{};
+    }
+
+    metadata.calibration = std::monostate{};
+    if (j.contains("calibration")) {
+        metadata.calibration = j.at("calibration").get<ComboCalibrationInfo>();
+    }
+}
+
+EVRGB_API void from_json(const nlohmann::json& j, ComboMetadata& metadata)
+{
+    fromJson(j, metadata);
 }
 
 }  // namespace evrgb
