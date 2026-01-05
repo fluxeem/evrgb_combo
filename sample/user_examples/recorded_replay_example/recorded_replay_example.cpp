@@ -1,6 +1,7 @@
 #include "recording/recorded_sync_reader.h"
 
 #include "utils/event_visualizer.h"
+#include "utils/calib_info.h"
 
 #include <iostream>
 #include <algorithm>
@@ -41,6 +42,39 @@ int main(int argc, char* argv[])
         reader.getRgbFrameSize(),
         reader.getEventFrameSize()
     );
+
+    // Load and apply metadata for alignment
+    auto metadata = reader.getMetadata();
+    
+    if (metadata.has_value()) {
+        std::cout << "Loaded metadata from recording." << std::endl;
+        // Print metadata in JSON format
+        nlohmann::json j = *metadata;
+        std::cout << "\n========== Metadata Content ==========\n" << j.dump(2) << "\n=====================================\n" << std::endl;
+
+        // Set intrinsics if available
+        if (metadata->rgb.intrinsics && metadata->dvs.intrinsics) {
+            canvas.setIntrinsics(*metadata->rgb.intrinsics, *metadata->dvs.intrinsics);
+            std::cout << "Applied camera intrinsics from metadata." << std::endl;
+        }
+
+        // Set calibration if available
+        if (std::holds_alternative<evrgb::AffineTransform>(metadata->calibration)) {
+            auto affine = std::get<evrgb::AffineTransform>(metadata->calibration);
+            canvas.setCalibration(affine);
+            std::cout << "Applied affine calibration from metadata: tx=" << affine.A(0, 2)
+                      << ", ty=" << affine.A(1, 2) << std::endl;
+        }
+
+        // Set flip X for beam splitter arrangement
+        if (metadata->arrangement == evrgb::ComboArrangement::BEAM_SPLITTER) {
+            canvas.setFlipX(true);
+            std::cout << "Applied flip X for beam splitter arrangement." << std::endl;
+        }
+    } else {
+        std::cout << "No metadata found in recording, using default settings." << std::endl;
+        canvas.setFlipX(true); // Default flip for typical setups
+    }
 
     replay_status.last_frame_ts_us = reader.getRecordingStartTimeUs().value_or(0);
     replay_status.current_ts_us = replay_status.last_frame_ts_us + replay_status.base_time_step_ms * 1000;
