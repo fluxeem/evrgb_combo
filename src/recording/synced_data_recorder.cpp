@@ -194,19 +194,15 @@ void SyncedDataRecorder::stop()
 
     // Persist recording metadata atomically.
     nlohmann::json metadata;
-    metadata["schema_version"] = "1.0";
+    metadata["schema_version"] = "1.1";
     metadata["created_utc"] = toUtcIsoString(std::chrono::system_clock::now());
     metadata["sdk_version"] = EVRGB_VERSION;
-    metadata["config"] = {
+    metadata["recording_config"] = {
         {"fps", config_.fps},
         {"fourcc", config_.fourcc},
-        {"output_dir", config_.output_dir},
-        {"arrangement", config_.arrangement},
-        {"rgb_serial", config_.rgb_serial},
-        {"dvs_serial", config_.dvs_serial},
-        {"rgb_model", config_.rgb_model},
-        {"dvs_model", config_.dvs_model}
+        {"output_dir", config_.output_dir}
     };
+    metadata["combo_metadata"] = config_.combo_metadata;
     metadata["outputs"] = {
         {"rgb_path", rgb_path_},
         {"csv_path", csv_path_},
@@ -215,7 +211,9 @@ void SyncedDataRecorder::stop()
     };
     metadata["stats"] = {
         {"frame_count", frame_count_},
-        {"event_count", event_count_}
+        {"event_count", event_count_},
+        {"frame_width", frame_size_.width},
+        {"frame_height", frame_size_.height}
     };
 
     {

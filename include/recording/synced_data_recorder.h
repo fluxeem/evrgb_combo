@@ -31,11 +31,7 @@ struct SyncedRecorderConfig {
     std::string output_dir;   // Directory to store MP4/CSV/DVS raw
     double fps = 30.0;
     std::string fourcc = "mp4v";
-    std::string arrangement;  // Optional combo arrangement (e.g., "STEREO", "BEAM_SPLITTER")
-    std::string rgb_serial;
-    std::string dvs_serial;
-    std::string rgb_model;
-    std::string dvs_model;
+    ComboMetadata combo_metadata{};  // Snapshot of combo/device metadata to persist
 };
 
 class EVRGB_API SyncedDataRecorder {

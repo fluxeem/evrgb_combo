@@ -391,11 +391,7 @@ bool Combo::startRecording(const SyncedRecorderConfig& config)
 
     if (!recorder->isActive()) {
         SyncedRecorderConfig cfg = config;
-        cfg.arrangement = toString(arrangement_);
-        cfg.rgb_serial = rgb_serial_;
-        cfg.dvs_serial = dvs_serial_;
-        cfg.rgb_model = rgb_model_;
-        cfg.dvs_model = dvs_model_;
+        cfg.combo_metadata = getMetadata();
 
         if (!recorder->start(cfg)) {
             LOG_WARN("Recorder start failed (dir=%s)", config.output_dir.c_str());
