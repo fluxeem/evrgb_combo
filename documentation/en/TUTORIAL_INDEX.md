@@ -4,19 +4,26 @@ This page provides a complete list of tutorials for EvRGB Combo SDK to help you 
 
 ## 📚 Tutorial Categories
 
-### 🔰 Getting Started Tutorials
+### 🔰 Getting Started Tutorials (入门教程)
+
+These tutorials cover the fundamental knowledge and basic operations to help you quickly get started with EvRGB Combo SDK.
 
 | Tutorial | Description |
 |----------|-------------|
+| @subpage installation | SDK installation and environment setup |
 | @subpage enumeration_tutorial | Discover and identify connected camera devices |
 | @subpage camera_usage_tutorial | Basic operations for RGB and DVS cameras |
+| @subpage parameter_tuning_tutorial | Optimize camera parameters for best results |
+| @subpage recording_tutorial | Synchronized data recording and playback features |
 
-### ⚙️ Advanced Tutorials
+### ⚙️ Advanced Tutorials (进阶教程)
+
+These tutorials cover advanced features and professional applications.
 
 | Tutorial | Description |
 |----------|-------------|
-| @subpage parameter_tuning_tutorial | Optimize camera parameters for best results |
-| @subpage recording_tutorial | Synchronized data recording and playback features |
+| @subpage calibration_tutorial | Camera calibration and coordinate system alignment |
+| @subpage visualization_tutorial | Event visualization and display modes |
 
 ## 📋 Tutorial Features
 

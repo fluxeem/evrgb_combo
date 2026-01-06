@@ -13,7 +13,7 @@ bool TriggerBuffer::addTrigger(const TriggerSignal& trigger)
     std::lock_guard<std::mutex> lock(buffer_mutex_);
 
     if (temp_trigger_pair_.empty()) {
-        if (trigger.polarity == 0) {
+        if (trigger.polarity == 1) {
             temp_trigger_pair_.start_trigger = trigger;
             return false;
         }
@@ -28,7 +28,7 @@ bool TriggerBuffer::addTrigger(const TriggerSignal& trigger)
         return false;
     }
 
-    if (trigger.polarity == 1) {
+    if (trigger.polarity == 0) {
         temp_trigger_pair_.end_trigger = trigger;
         trigger_pair_queue_.push(TriggerPair{temp_trigger_pair_.start_trigger, temp_trigger_pair_.end_trigger});
         temp_trigger_pair_.reset();

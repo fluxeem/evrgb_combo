@@ -8,17 +8,69 @@
 ## [未发布]
 
 ### 新增
-- 初始变更日志设置
+- EventVisualizer 类，支持实时事件可视化（叠加/并排模式）
+- 分光镜对齐示例，包含交互式标定工具
+- 相机内参支持，包含 CameraIntrinsics 结构和工厂模式
+- 标定信息系统（CalibInfo、RigidTransform、AffineTransform）
+- 元数据持久化系统（CameraMetadata、ComboMetadata），支持 JSON 序列化
+- 录制元数据支持，集成到 SyncedDataRecorder 和 RecordedSyncReader
+- RGB 和 DVS 相机的设备型号基础设施
+- 相机排列模式（STEREO、BEAM_SPLITTER）及特定标定支持
+- nlohmann_json 依赖，作为 Git 子模块
+- 全面的文档：事件可视化教程、标定教程、更新的教程文档
 
 ### 变更
-
-### 已弃用
-
-### 移除
+- 相机管理重构，使用共享指针和工厂模式
+- Combo 接口增强，整合元数据处理
+- 录制系统改进，支持元数据
+- 文档重组和教程重新组织
+- 构建系统更新，支持新的依赖和源文件
 
 ### 修复
+- JSON 序列化链接问题
+- 接口兼容性问题
+- 文档不一致性
 
-### 安全
+### 移除
+- 未使用的 combo_threads.h 头文件
+
+## [1.1.0] - 2026-01-05
+
+### 新增
+- 新增 STEREO 和 BEAM_SPLITTER 配置的标定信息支持
+- CalibInfo 类用于管理标定数据
+- 分光镜对齐示例，用于精确的光学设置
+- 增强的文档，包含标定教程
+- 支持硬件配置识别和管理
+
+### 变更
+- 更新版本到 1.1.0
+- 改进硬件配置处理
+- 增强文档结构
+
+### 修复
+- 文档小改进
+
+## [1.0.1] - 2026-01-02
+
+### 新增
+- 遵循 Keep a Changelog 标准的完整变更日志系统
+- documentation/zh/CHANGELOG.md 中的中文版变更日志
+- 增强的 RecordedSyncReader 接口，包含新功能
+- 改进的文档交叉引用
+
+### 变更
+- 将版本号从 1.0.0 更新到 1.0.1
+- 重构示例代码结构：
+  - 将示例实现移至子目录
+  - 从根 sample 目录中删除重复的示例文件
+- 更新 README.md 和 HOME_PAGE.md 中的文档引用
+- 增强英文和中文版本的 PARAMETER_TUNING_TUTORIAL.md 内容
+- 改进 RecordedSyncReader 实现，添加额外功能
+
+### 修复
+- 文档结构和交叉引用
+- 示例代码组织和构建配置
 
 ## [1.0.0] - 2025-01-02
 

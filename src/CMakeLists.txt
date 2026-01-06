@@ -4,7 +4,10 @@ find_package(DvsenseDriver REQUIRED)
 add_compile_definitions(EVRGB_EXPORTS)
 
 add_library(evrgb_combo SHARED
+    utils/calib_info.cpp
+    utils/event_visualizer.cpp
     utils/evrgb_logger.cpp
+    camera/i_camera.cpp
     camera/rgb_camera.cpp
     camera/dvs_camera.cpp
     core/combo_core.cpp
@@ -23,6 +26,7 @@ target_link_libraries(evrgb_combo
         DvsenseDriver::Driver 
     PRIVATE
         loguru::loguru
+        nlohmann_json::nlohmann_json
         ${MVS_LIBRARIES}
 )
 

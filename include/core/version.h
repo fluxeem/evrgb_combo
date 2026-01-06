@@ -5,8 +5,8 @@
 #pragma once
 
 #define EVRGB_VERSION_MAJOR 1
-#define EVRGB_VERSION_MINOR 0
-#define EVRGB_VERSION_PATCH 1
+#define EVRGB_VERSION_MINOR 1
+#define EVRGB_VERSION_PATCH 0
 
 // Auto-generate version string from version numbers
 #define EVRGB_VERSION_STRING_HELPER(major, minor, patch) #major "." #minor "." #patch

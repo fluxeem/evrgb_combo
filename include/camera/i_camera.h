@@ -1,10 +1,14 @@
 #ifndef EVRGB_I_CAMERA_H_
 #define EVRGB_I_CAMERA_H_
 
+#include <cstdint>
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
-#include <cstdint>
 #include <opencv2/opencv.hpp>
+
+#include "utils/calib_info.h"
 
 #ifdef _WIN32
     #ifdef EVRGB_EXPORTS
@@ -87,9 +91,9 @@ enum class NodeInterfaceType : int32_t {
     Category     ///< Grouping node
 };
 
-class EVRGB_API ICamera {
+class EVRGB_API IRgbCamera {
 public:
-    virtual ~ICamera() = default;
+    virtual ~IRgbCamera() = default;
 
     // Lifecycle
     virtual bool initialize(const std::string& serial_number = "") = 0;
@@ -120,21 +124,44 @@ public:
     virtual CameraStatus loadFeatureFile(const std::string& file_path) = 0;
     virtual CameraStatus saveFeatureFile(const std::string& file_path) = 0;
 
-    
+    // shortcut
+    virtual CameraStatus getDeviceModelName(StringProperty& out)
+    {
+        out = StringProperty{"unknown", 0};
+        return CameraStatus{-1, "Not implemented"};
+    }
 
     // Escape hatch
     virtual void* getNativeHandle() = 0;
-};
-
-class EVRGB_API IRgbCamera : public ICamera {
-public:
-    virtual ~IRgbCamera() = default;
 
     // RGB specific
     virtual bool getLatestImage(cv::Mat& image) = 0;
     virtual unsigned int getWidth() const = 0;
     virtual unsigned int getHeight() const = 0;
+
+    // Intrinsic parameters (optional)
+    virtual void setIntrinsics(const CameraIntrinsics& intrinsics) = 0;
+    virtual std::optional<CameraIntrinsics> getIntrinsics() const = 0;
 };
+
+/// RGB camera information structure (device-level metadata)
+struct EVRGB_API RgbCameraInfo {
+    char manufacturer[64] = {};
+    char serial_number[64] = {};
+    unsigned int width = 0;
+    unsigned int height = 0;
+};
+
+/// Factory function used to instantiate concrete RGB camera drivers
+using RgbCameraFactoryFn = std::function<std::shared_ptr<IRgbCamera>()>;
+using RgbEnumeratorFn = std::function<std::vector<RgbCameraInfo>()>;
+
+// Discovery and creation helpers (shared across brands)
+EVRGB_API std::vector<RgbCameraInfo> enumerateAllRgbCameras();
+EVRGB_API void registerRgbCameraFactory(const std::string& manufacturer_prefix, RgbCameraFactoryFn creator);
+EVRGB_API void registerRgbEnumerator(RgbEnumeratorFn enumerator);
+EVRGB_API std::shared_ptr<IRgbCamera> createRgbCamera(const RgbCameraInfo& info);
+EVRGB_API std::shared_ptr<IRgbCamera> createRgbCameraBySerial(const std::string& serial_number);
 
 } // namespace evrgb
 

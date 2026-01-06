@@ -25,3 +25,8 @@ add_executable(test_interface_compatibility test_interface_compatibility.cpp)
 target_link_libraries(test_interface_compatibility PRIVATE evrgb_combo ${MVS_LIBRARIES})
 set_dev_sample_defaults(test_interface_compatibility)
 target_include_directories(test_interface_compatibility PRIVATE ${MVS_INCLUDE_DIR})
+
+add_executable(test_device_model_name test_device_model_name.cpp)
+target_link_libraries(test_device_model_name PRIVATE evrgb_combo ${MVS_LIBRARIES})
+set_dev_sample_defaults(test_device_model_name)
+target_include_directories(test_device_model_name PRIVATE ${MVS_INCLUDE_DIR})

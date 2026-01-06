@@ -39,9 +39,10 @@ int main() {
             
             // Test property access through interface
             std::cout << "Testing property access..." << std::endl;
-            rgb_interface->setProperty("ExposureTime", 10000.0); // 10ms exposure
-            double exp_time = rgb_interface->getPropertyDouble("ExposureTime");
-            std::cout << "Exposure time: " << exp_time << std::endl;
+            rgb_interface->setFloat("ExposureTime", 10000.0); // 10ms exposure
+            evrgb::FloatProperty exp_time;
+            evrgb::CameraStatus status = rgb_interface->getFloat("ExposureTime", exp_time);
+            std::cout << "Exposure time: " << exp_time.value << std::endl;
             
             // Test starting camera
             std::cout << "Starting camera..." << std::endl;

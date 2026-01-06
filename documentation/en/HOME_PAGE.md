@@ -12,6 +12,27 @@ EvRGB Combo SDK is a C++ driver library designed for RGB+DVS hardware suites, pr
 - **📹 Data Recording & Playback**: Synchronized recording (RGB MP4 + CSV + DVS raw) and replay functionality
 - **🔧 Cross-Platform Support**: Linux and Windows with comprehensive build system
 
+## 🔧 Hardware Configurations
+
+The EvRGB Combo SDK supports two different hardware configurations to accommodate various application scenarios:
+
+### **STEREO Configuration**
+- **Setup**: RGB camera and DVS camera are placed side-by-side
+- **Characteristics**: 
+  - Has a baseline distance between the two cameras
+  - Suitable for stereo vision applications requiring depth perception
+  - May introduce parallax effects for objects at different distances
+  - Easier to implement and maintain
+
+### **BEAM_SPLITTER Configuration**
+- **Setup**: Uses a beam splitter (optical prism/mirror) to allow both cameras to share the same field of view
+- **Characteristics**:
+  - Zero baseline - both cameras see the exact same scene
+  - No parallax effects, eliminating depth-related visual differences
+  - Perfect for pixel-level RGB-DVS data alignment
+  - Ideal for applications requiring precise temporal and spatial alignment
+  - Requires careful calibration of the beam splitter assembly
+
 ## 🚀 Quick Start
 
 ### Prerequisites
